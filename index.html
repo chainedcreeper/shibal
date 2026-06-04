@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="/favicon.ico">
+<title>우송대 AI Tutor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes bounce3 {
+    0%, 80%, 100% { transform: translateY(0); }
+    40%           { transform: translateY(-5px); }
+  }
+
+  .fade-up  { animation: fadeUp .3s ease both; }
+  .spinner  { border: 3px solid #e0e7ff; border-top-color: #6366f1; border-radius: 50%; animation: spin .7s linear infinite; }
+  .dot-b    { animation: bounce3 1.2s infinite; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+  .tab-active { color: #6366f1 !important; border-bottom: 2px solid #6366f1; }
+  .drop-hover { border-color: #6366f1 !important; background: #eef2ff !important; }
+</style>
+</head>
+<body class="bg-slate-100 h-screen flex flex-col overflow-hidden">
+
+<!-- 로그인 모달 -->
+<div id="authModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-2xl shadow-xl p-6 w-80 flex flex-col gap-4">
+    <div class="flex items-center gap-2 mb-1">
+      <div class="w-7 h-7 bg-indigo-600 rounded-md flex items-center justify-center text-white text-xs font-bold">AI</div>
+      <span class="font-semibold text-slate-800 text-sm">우송대 AI Tutor</span>
+    </div>
+
+    <!-- 탭 -->
+    <div class="flex border-b border-slate-200">
+      <button id="loginTab" onclick="switchAuthTab('login')"
+              class="flex-1 py-2 text-xs font-semibold text-indigo-600 border-b-2 border-indigo-600">로그인</button>
+      <button id="registerTab" onclick="switchAuthTab('register')"
+              class="flex-1 py-2 text-xs font-medium text-slate-400 border-b-2 border-transparent">회원가입</button>
+    </div>
+
+    <!-- 로그인 폼 -->
+    <div id="loginForm" class="flex flex-col gap-3">
+      <input id="loginId" type="text" placeholder="학번"
+             class="border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      <input id="loginPw" type="password" placeholder="비밀번호"
+             class="border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      <p id="loginErr" class="text-[11px] text-red-500 hidden"></p>
+      <button onclick="doLogin()"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2.5 rounded-lg">로그인</button>
+    </div>
+
+    <!-- 회원가입 폼 -->
+    <div id="registerForm" class="flex flex-col gap-3 hidden">
+      <input id="regId" type="text" placeholder="학번"
+             class="border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      <input id="regName" type="text" placeholder="이름"
+             class="border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      <input id="regPw" type="password" placeholder="비밀번호"
+             class="border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      <p id="regErr" class="text-[11px] text-red-500 hidden"></p>
+      <button onclick="doRegister()"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2.5 rounded-lg">가입하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<header class="bg-white border-b border-slate-200 px-5 h-13 flex items-center gap-2.5 shrink-0 z-10" style="height:52px">
+  <div class="w-7 h-7 bg-indigo-600 rounded-md flex items-center justify-center text-white text-xs font-bold select-none">AI</div>
+  <span class="font-semibold text-slate-800 text-sm">우송대 AI Tutor</span>
+  <span class="ml-auto text-xs text-slate-400" id="userLabel">Woosong University</span>
+  <button id="logoutBtn" onclick="doLogout()" class="hidden text-xs text-slate-400 hover:text-red-500 transition-colors">로그아웃</button>
+</header>
+
+<!-- Body: 3-column -->
+<div class="flex flex-1 overflow-hidden gap-0">
+
+  <!-- ── Col 1: Upload sidebar ── -->
+  <aside class="w-56 bg-white border-r border-slate-200 flex flex-col p-4 gap-3 shrink-0 overflow-y-auto">
+
+    <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">강의자료</p>
+
+    <!-- Drop zone -->
+    <div id="dropZone"
+         class="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-all"
+         onclick="document.getElementById('fileInput').click()">
+      <div class="text-2xl mb-1">📄</div>
+      <p class="text-xs font-medium text-slate-500">PDF 드래그 · 클릭</p>
+      <p class="text-[10px] text-slate-400 mt-0.5">강의 슬라이드 · 교재</p>
+    </div>
+    <input id="fileInput" type="file" accept=".pdf" class="hidden">
+
+    <!-- Upload state -->
+    <div id="uploadState" class="hidden px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-1.5">
+      <div id="upSpinner" class="spinner hidden shrink-0" style="width:14px;height:14px;border-width:2px"></div>
+      <span id="upDone" class="hidden text-sm shrink-0">✅</span>
+      <div class="min-w-0">
+        <p id="upName" class="text-[11px] font-medium text-slate-700 truncate"></p>
+        <p id="upMsg"  class="text-[10px] text-slate-400"></p>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <button id="analyzeBtn" onclick="startAnalysis()" disabled
+            class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-xs font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1">
+      🔍 분석 시작
+    </button>
+
+    <button id="videoBtn" onclick="generateVideo()" disabled
+            class="w-full bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 text-xs font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1">
+      🎬 강의 영상 생성
+    </button>
+
+    <button id="qaBtn" onclick="generateQA()" disabled
+            class="w-full bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 text-xs font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1">
+      🗂️ Q&A 데이터 생성
+    </button>
+
+    <div id="qaProgressBox" class="hidden space-y-1 pt-1">
+      <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Q&A 생성 진행</p>
+      <div id="qaProgressText" class="text-[11px] text-slate-500">준비 중...</div>
+      <div class="w-full bg-slate-100 rounded-full h-1.5">
+        <div id="qaProgressBar" class="bg-indigo-500 h-1.5 rounded-full transition-all" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div id="progressBox" class="hidden space-y-2 pt-1">
+      <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">진행 상황</p>
+      <div id="pg-summary"  class="flex items-center gap-1.5"><div class="step-dot w-3 h-3 rounded-full border-2 border-slate-200 shrink-0"></div><span class="text-[11px] text-slate-400">강의 요약</span></div>
+      <div id="pg-concepts" class="flex items-center gap-1.5"><div class="step-dot w-3 h-3 rounded-full border-2 border-slate-200 shrink-0"></div><span class="text-[11px] text-slate-400">핵심 개념</span></div>
+      <div id="pg-exam"     class="flex items-center gap-1.5"><div class="step-dot w-3 h-3 rounded-full border-2 border-slate-200 shrink-0"></div><span class="text-[11px] text-slate-400">예상 문제</span></div>
+    </div>
+
+  </aside>
+
+  <!-- ── Col 2: Analysis area ── -->
+  <main class="flex-1 flex flex-col overflow-hidden min-w-0">
+
+    <!-- Tabs -->
+    <div class="bg-white border-b border-slate-200 flex shrink-0">
+      <button class="tab-btn tab-active px-4 py-3 text-xs font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors" onclick="switchTab('summary',this)">📖 요약</button>
+      <button class="tab-btn           px-4 py-3 text-xs font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors" onclick="switchTab('concepts',this)">🧠 핵심 개념</button>
+      <button class="tab-btn           px-4 py-3 text-xs font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors" onclick="switchTab('exam',this)">📝 예상 문제</button>
+      <button class="tab-btn           px-4 py-3 text-xs font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors" onclick="switchTab('video',this)">🎬 강의 영상</button>
+    </div>
+
+    <!-- Panels -->
+    <div class="flex-1 overflow-hidden relative">
+
+      <!-- Summary -->
+      <div id="tab-summary" class="tab-panel absolute inset-0 overflow-y-auto p-5">
+        <div id="ph-summary" class="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
+          <span class="text-4xl">📄</span>
+          <p class="text-xs">PDF를 업로드하고 분석을 시작하세요</p>
+        </div>
+        <div id="ld-summary" class="hidden flex items-center gap-2 text-slate-400 text-xs">
+          <div class="spinner" style="width:16px;height:16px"></div> 요약 생성 중...
+        </div>
+        <div id="ct-summary" class="hidden fade-up">
+          <p class="text-xs font-semibold text-slate-500 mb-2">강의 요약</p>
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <pre id="tx-summary" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Concepts -->
+      <div id="tab-concepts" class="tab-panel absolute inset-0 overflow-y-auto p-5 hidden">
+        <div id="ph-concepts" class="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
+          <span class="text-4xl">🧠</span>
+          <p class="text-xs">PDF를 업로드하고 분석을 시작하세요</p>
+        </div>
+        <div id="ld-concepts" class="hidden flex items-center gap-2 text-slate-400 text-xs">
+          <div class="spinner" style="width:16px;height:16px"></div> 핵심 개념 추출 중...
+        </div>
+        <div id="ct-concepts" class="hidden fade-up">
+          <p class="text-xs font-semibold text-slate-500 mb-2">핵심 개념 정리</p>
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <pre id="tx-concepts" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Exam -->
+      <div id="tab-exam" class="tab-panel absolute inset-0 overflow-y-auto p-5 hidden">
+        <div id="ph-exam" class="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
+          <span class="text-4xl">📝</span>
+          <p class="text-xs">PDF를 업로드하고 분석을 시작하세요</p>
+        </div>
+        <div id="ld-exam" class="hidden flex items-center gap-2 text-slate-400 text-xs">
+          <div class="spinner" style="width:16px;height:16px"></div> 예상 문제 생성 중...
+        </div>
+        <div id="ct-exam" class="hidden fade-up">
+          <p class="text-xs font-semibold text-slate-500 mb-2">예상 시험문제</p>
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <pre id="tx-exam" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Video -->
+      <div id="tab-video" class="tab-panel absolute inset-0 overflow-y-auto p-5 hidden">
+        <div id="ph-video" class="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
+          <span class="text-4xl">🎬</span>
+          <p class="text-xs">사이드바에서 강의 영상을 생성하세요</p>
+        </div>
+        <div id="ld-video" class="hidden flex flex-col items-center justify-center h-full gap-3">
+          <div class="spinner" style="width:32px;height:32px;border-width:3px"></div>
+          <p class="text-xs text-slate-400">강의 영상 생성 중… 잠시 기다려 주세요</p>
+        </div>
+        <div id="ct-video" class="hidden fade-up">
+          <p class="text-xs font-semibold text-slate-500 mb-2">AI 강의 영상</p>
+          <video id="videoEl" controls class="w-full rounded-xl border border-slate-200 shadow-sm bg-black"></video>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ── Col 3: Chat (always visible) ── -->
+  <aside class="w-80 bg-white border-l border-slate-200 flex flex-col shrink-0">
+
+    <!-- Chat header -->
+    <div class="px-4 py-3 border-b border-slate-200 shrink-0 flex items-center gap-2">
+      <span class="text-sm">💬</span>
+      <p class="text-xs font-semibold text-slate-700">PDF 질의응답</p>
+      <span id="levelBadge" class="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 hidden"></span>
+      <span class="w-2 h-2 rounded-full bg-slate-300" id="chatDot"></span>
+    </div>
+
+    <!-- Messages -->
+    <div id="chatLog" class="flex-1 overflow-y-auto p-3 space-y-2.5">
+      <div class="flex justify-start">
+        <div class="bg-slate-100 text-slate-600 rounded-2xl rounded-tl-sm px-3 py-2 text-xs max-w-[90%]">
+          PDF를 업로드하면 강의자료에 대해 무엇이든 질문할 수 있어요 📚
+        </div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="border-t border-slate-200 p-3 flex gap-2 shrink-0">
+      <input id="chatInput" type="text"
+             placeholder="질문을 입력하세요…"
+             class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all"
+             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}">
+      <button onclick="sendChat()"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-2 rounded-xl transition-colors shrink-0">
+        전송
+      </button>
+    </div>
+
+  </aside>
+
+</div>
+
+<script>
+/* ── Auth ── */
+let authToken = localStorage.getItem('token') || '';
+
+function authHeader() {
+  return authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
+}
+
+function switchAuthTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('loginForm').classList.toggle('hidden', !isLogin);
+  document.getElementById('registerForm').classList.toggle('hidden', isLogin);
+  document.getElementById('loginTab').className = isLogin
+    ? 'flex-1 py-2 text-xs font-semibold text-indigo-600 border-b-2 border-indigo-600'
+    : 'flex-1 py-2 text-xs font-medium text-slate-400 border-b-2 border-transparent';
+  document.getElementById('registerTab').className = !isLogin
+    ? 'flex-1 py-2 text-xs font-semibold text-indigo-600 border-b-2 border-indigo-600'
+    : 'flex-1 py-2 text-xs font-medium text-slate-400 border-b-2 border-transparent';
+}
+
+async function doLogin() {
+  const id = document.getElementById('loginId').value.trim();
+  const pw = document.getElementById('loginPw').value;
+  const errEl = document.getElementById('loginErr');
+  errEl.classList.add('hidden');
+  try {
+    const form = new URLSearchParams({ username: id, password: pw });
+    const r = await fetch('/login', { method: 'POST', body: form });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.detail; errEl.classList.remove('hidden'); return; }
+    authToken = d.access_token;
+    localStorage.setItem('token', authToken);
+    document.getElementById('authModal').classList.add('hidden');
+    document.getElementById('userLabel').textContent = d.name + '님';
+    document.getElementById('logoutBtn').classList.remove('hidden');
+  } catch { errEl.textContent = '서버 오류'; errEl.classList.remove('hidden'); }
+}
+
+async function doRegister() {
+  const id = document.getElementById('regId').value.trim();
+  const name = document.getElementById('regName').value.trim();
+  const pw = document.getElementById('regPw').value;
+  const errEl = document.getElementById('regErr');
+  errEl.classList.add('hidden');
+  try {
+    const r = await fetch('/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_id: id, name, password: pw })
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.detail; errEl.classList.remove('hidden'); return; }
+    switchAuthTab('login');
+    document.getElementById('loginId').value = id;
+  } catch { errEl.textContent = '서버 오류'; errEl.classList.remove('hidden'); }
+}
+
+function doLogout() {
+  authToken = '';
+  localStorage.removeItem('token');
+  location.reload();
+}
+
+// 이미 토큰 있으면 모달 숨김
+if (authToken) {
+  document.getElementById('authModal').classList.add('hidden');
+  document.getElementById('logoutBtn').classList.remove('hidden');
+  try {
+    const payload = JSON.parse(atob(authToken.split('.')[1]));
+    document.getElementById('userLabel').textContent = payload.name + '님';
+  } catch {}
+}
+
+/* ── File upload ── */
+const fileInput = document.getElementById('fileInput');
+const dropZone  = document.getElementById('dropZone');
+
+fileInput.addEventListener('change', e => { if (e.target.files[0]) upload(e.target.files[0]); });
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drop-hover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drop-hover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drop-hover');
+  const f = e.dataTransfer.files[0];
+  if (f?.name.endsWith('.pdf')) upload(f);
+});
+
+async function upload(file) {
+  show('uploadState'); show('upSpinner'); hide('upDone');
+  setText('upName', file.name); setText('upMsg', '처리 중…');
+  setBtn('analyzeBtn', false);
+
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch('/upload', { method: 'POST', body: fd, headers: authHeader() });
+    if (!r.ok) throw new Error();
+    hide('upSpinner'); show('upDone');
+    setText('upMsg', '완료');
+    setBtn('analyzeBtn', true);
+    setBtn('videoBtn', true);
+    setBtn('qaBtn', true);
+    document.getElementById('chatDot').className = 'ml-auto w-2 h-2 rounded-full bg-green-400';
+  } catch {
+    hide('upSpinner');
+    setText('upMsg', '오류 발생');
+  }
+}
+
+/* ── Tabs ── */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('tab-active'));
+  document.getElementById('tab-' + name).classList.remove('hidden');
+  btn.classList.add('tab-active');
+}
+
+/* ── Analysis (SSE) ── */
+const ORDER = ['summary', 'concepts', 'exam'];
+
+function startAnalysis() {
+  setBtn('analyzeBtn', false);
+  show('progressBox');
+  ORDER.forEach(k => { hide('ph-'+k); hide('ct-'+k); show('ld-'+k); });
+  setStep('summary', 'active');
+
+  const es = new EventSource('/analyze');
+  es.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.type === 'done')  { es.close(); setBtn('analyzeBtn', true); return; }
+    if (d.type === 'error') { es.close(); setBtn('analyzeBtn', true); return; }
+
+    const k = d.type;
+    hide('ld-'+k);
+    setText('tx-'+k, d.content);
+    show('ct-'+k);
+    setStep(k, 'done');
+
+    const next = ORDER[ORDER.indexOf(k) + 1];
+    if (next) setStep(next, 'active');
+  };
+  es.onerror = () => { es.close(); setBtn('analyzeBtn', true); };
+}
+
+function setStep(key, state) {
+  const row = document.getElementById('pg-' + key);
+  if (!row) return;
+  const dot   = row.querySelector('.step-dot');
+  const label = row.querySelector('span');
+  if (state === 'active') {
+    dot.className   = 'step-dot w-3 h-3 rounded-full border-2 border-indigo-400 bg-indigo-100 shrink-0';
+    label.className = 'text-[11px] text-indigo-500 font-medium';
+  } else {
+    dot.className   = 'step-dot w-3 h-3 rounded-full bg-indigo-500 shrink-0 flex items-center justify-center';
+    dot.innerHTML   = '<svg viewBox="0 0 10 10" fill="none" style="width:8px;height:8px"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>';
+    label.className = 'text-[11px] text-slate-500';
+  }
+}
+
+/* ── Video ── */
+async function generateVideo() {
+  setBtn('videoBtn', false);
+  switchTab('video', document.querySelectorAll('.tab-btn')[3]);
+  hide('ph-video'); hide('ct-video'); show('ld-video');
+  try {
+    const r = await fetch('/generate-video', { method: 'POST' });
+    if (!r.ok) throw new Error();
+    const blob = await r.blob();
+    hide('ld-video'); show('ct-video');
+    document.getElementById('videoEl').src = URL.createObjectURL(blob);
+  } catch {
+    hide('ld-video'); show('ph-video');
+  }
+  setBtn('videoBtn', true);
+}
+
+/* ── Q&A Generation ── */
+async function generateQA() {
+  setBtn('qaBtn', false);
+  show('qaProgressBox');
+  document.getElementById('qaProgressText').textContent = '시작 중...';
+  document.getElementById('qaProgressBar').style.width = '0%';
+
+  const es = new EventSource('/generate-qa');
+  es.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.done) {
+      es.close();
+      setBtn('qaBtn', true);
+      document.getElementById('qaProgressText').textContent = `완료: ${d.total}개 생성 → ${d.path}`;
+      document.getElementById('qaProgressBar').style.width = '100%';
+      return;
+    }
+    const pct = Math.round((d.current / d.total) * 100);
+    document.getElementById('qaProgressText').textContent = `${d.current} / ${d.total} 청크 처리 중...`;
+    document.getElementById('qaProgressBar').style.width = pct + '%';
+  };
+  es.onerror = () => {
+    es.close();
+    setBtn('qaBtn', true);
+    document.getElementById('qaProgressText').textContent = '오류 발생';
+  };
+}
+
+/* ── Chat ── */
+const chatLog = document.getElementById('chatLog');
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  addBubble(msg, true);
+  const tid = addTyping();
+  try {
+    const r = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ message: msg })
+    });
+    document.getElementById(tid)?.remove();
+    const bubbleId = addStreamBubble();
+    fetch('/my-level', { headers: authHeader() })
+      .then(r => r.json())
+      .then(d => {
+        const badge = document.getElementById('levelBadge');
+        const colors = { '입문': 'bg-green-100 text-green-600', '중급': 'bg-blue-100 text-blue-600', '심화': 'bg-purple-100 text-purple-600' };
+        badge.className = `ml-auto text-[10px] px-2 py-0.5 rounded-full ${colors[d.label] || 'bg-slate-100 text-slate-400'}`;
+        badge.textContent = `${d.label} ${d.level.toFixed(1)}`;
+        badge.classList.remove('hidden');
+      }).catch(() => {});
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = JSON.parse(line.slice(6));
+        if (data.done) break;
+        if (data.token) appendToStreamBubble(bubbleId, data.token);
+      }
+    }
+  } catch {
+    document.getElementById(tid)?.remove();
+    addBubble('오류가 발생했습니다.', false);
+  }
+}
+
+function addStreamBubble() {
+  const id = 'sb-' + Date.now();
+  const wrap = document.createElement('div');
+  wrap.className = 'flex fade-up justify-start';
+  const bubble = document.createElement('div');
+  bubble.id = id;
+  bubble.className = 'bg-slate-100 text-slate-700 rounded-2xl rounded-tl-sm px-3 py-2 text-xs max-w-[85%] whitespace-pre-wrap';
+  wrap.appendChild(bubble);
+  chatLog.appendChild(wrap);
+  chatLog.scrollTop = chatLog.scrollHeight;
+  return id;
+}
+
+function appendToStreamBubble(id, token) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent += token; chatLog.scrollTop = chatLog.scrollHeight; }
+}
+
+function addBubble(text, isUser) {
+  const wrap = document.createElement('div');
+  wrap.className = 'flex fade-up ' + (isUser ? 'justify-end' : 'justify-start');
+  const bubble = document.createElement('div');
+  bubble.className = isUser
+    ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-3 py-2 text-xs max-w-[85%] whitespace-pre-wrap'
+    : 'bg-slate-100 text-slate-700 rounded-2xl rounded-tl-sm px-3 py-2 text-xs max-w-[85%] whitespace-pre-wrap';
+  bubble.textContent = text;
+  wrap.appendChild(bubble);
+  chatLog.appendChild(wrap);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function addTyping() {
+  const id = 'ty-' + Date.now();
+  const wrap = document.createElement('div');
+  wrap.id = id; wrap.className = 'flex justify-start fade-up';
+  wrap.innerHTML = `<div class="bg-slate-100 rounded-2xl rounded-tl-sm px-3 py-2.5 flex gap-1 items-center">
+    <span class="w-1.5 h-1.5 bg-slate-400 rounded-full dot-b" style="animation-delay:0ms"></span>
+    <span class="w-1.5 h-1.5 bg-slate-400 rounded-full dot-b" style="animation-delay:150ms"></span>
+    <span class="w-1.5 h-1.5 bg-slate-400 rounded-full dot-b" style="animation-delay:300ms"></span>
+  </div>`;
+  chatLog.appendChild(wrap);
+  chatLog.scrollTop = chatLog.scrollHeight;
+  return id;
+}
+
+/* ── Helpers ── */
+function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
+function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
+function setText(id, t) { const el = document.getElementById(id); if (el) el.textContent = t; }
+function setBtn(id, on) { const el = document.getElementById(id); if (el) el.disabled = !on; }
+</script>
+</body>
+</html>

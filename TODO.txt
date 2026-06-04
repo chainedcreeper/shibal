@@ -1,0 +1,24 @@
+===== TODO =====
+
+[1] 프롬프트 튜닝 (사용자가 직접 할 예정)
+  - app.py의 PROMPTS 리스트 수정
+  - summary / concepts / exam 프롬프트 이쁘게 다듬기
+  - 위치: app.py 95번째 줄 근처 PROMPTS 변수
+
+[2] 48GB 서버 연결 시 Map-Reduce 복원
+  - server_client.py에 ask_mapreduce_server() 추가
+  - 현재 로컬은 ask_full() 사용 중 (LLM 1번 호출)
+  - 서버 연결 후 rag.py ask_mapreduce() 함수 살려서 적용
+
+[3] 학교 서버 IP 설정
+  - server_client.py 3번째 줄
+  - SERVER_URL = "http://학교서버IP:11434" 여기에 실제 IP 입력
+
+[4] Kubeflow 개인화 학습 파이프라인
+  - train_personal.py 서버에서 실행
+  - 학생별 50개 이상 대화 쌓이면 학습 트리거
+  - EXAONE-3.5-2.4B 기반 QLoRA SFT
+
+[5] TTS 품질 개선 (gTTS → 더 자연스러운 TTS)
+  - 현재: tts.py gTTS 사용
+  - 개선 후보: Coqui TTS, Edge TTS

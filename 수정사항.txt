@@ -1,0 +1,29 @@
+===== 수정사항 로그 =====
+
+[1] app.py - line 1
+  Fastapi → fastapi (대소문자 오류 수정)
+
+[2] app.py - root() 함수
+  open("index.html") → open(os.path.join(BASE_DIR, "index.html"))
+  이유: 서버 실행 경로에 따라 index.html 못 찾는 문제 수정
+
+[3] llm.py - 모델명
+  qwen3.5:latest → qwen3:8b (다운받은 모델에 맞게 수정)
+
+[4] llm.py - 옵션 추가
+  num_predict: 512, num_ctx: 2048 추가 (답변 속도 개선)
+
+[5] llm.py - 스트리밍 함수 추가
+  ask_qwen_stream() 추가: stream=True로 ollama 호출, 토큰 단위로 yield
+
+[6] rag.py - 스트리밍 함수 추가
+  ask_stream() 추가: RAG 검색 후 ask_qwen_stream 호출
+
+[7] app.py - /chat 엔드포인트
+  단순 JSON 응답 → SSE 스트리밍 응답으로 교체
+  <think> 태그 실시간 필터링 포함
+
+[8] index.html - sendChat() 함수
+  fetch 후 json() → ReadableStream으로 토큰 단위 수신
+  addStreamBubble(), appendToStreamBubble() 함수 추가
+  결과: 답변이 생성되는 즉시 화면에 출력됨

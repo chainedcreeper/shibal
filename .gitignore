@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.mp3
+*.mp4
+slide_*.png
+.env
+students.db
+*.jsonl
+*.gguf
+personal_models/
+level_models/
+test_input.pdf
+venv/
+.venv/
