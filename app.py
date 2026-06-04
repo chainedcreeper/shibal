@@ -1,3 +1,6 @@
+import os
+os.environ["SURYA_DEVICE"] = "cpu"
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
