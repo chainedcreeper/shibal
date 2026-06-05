@@ -13,3 +13,5 @@ level_models/
 test_input.pdf
 venv/
 .venv/
+local.env
+*.env

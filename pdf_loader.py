@@ -1,13 +1,66 @@
+import re
 import fitz
+from PIL import Image
+from concurrent.futures import ThreadPoolExecutor
+
+DPI = 192
+
+_manager = None
+_predictor = None
+_surya_available = None
 
 
-def extract_text(pdf_path):
-    doc = fitz.open(pdf_path)
+def _init_surya():
+    global _manager, _predictor, _surya_available
+    if _surya_available is not None:
+        return _surya_available
+    try:
+        from surya.inference import SuryaInferenceManager
+        from surya.recognition import RecognitionPredictor
+        _manager = SuryaInferenceManager(lazy=True)
+        _predictor = RecognitionPredictor(_manager)
+        _surya_available = True
+    except Exception:
+        _surya_available = False
+    return _surya_available
+
+
+def _html_to_text(html: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"&nbsp;", " ", text)
+    text = re.sub(r"&lt;", "<", text)
+    text = re.sub(r"&gt;", ">", text)
+    text = re.sub(r"&amp;", "&", text)
+    return re.sub(r" +", " ", text).strip()
+
+
+def _page_to_image(page) -> Image.Image:
+    pix = page.get_pixmap(dpi=DPI)
+    return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+
+def _extract_with_surya(doc) -> list:
+    with ThreadPoolExecutor() as executor:
+        images = list(executor.map(_page_to_image, list(doc)))
+
+    page_results = _predictor(images, full_page=True)
+
+    result = []
+    for page_num, ocr_result in enumerate(page_results, start=1):
+        blocks = sorted(
+            (b for b in ocr_result.blocks if not b.skipped and not b.error),
+            key=lambda b: b.reading_order if b.reading_order is not None else 9999,
+        )
+        text = "\n".join(_html_to_text(b.html) for b in blocks if b.html).strip()
+        if text:
+            result.append({"text": text, "page": page_num})
+    return result
+
+
+def _extract_with_fitz(doc) -> list:
     result = []
     for page in doc:
         text = page.get_text("text").strip()
-
-        # 표 추출 후 텍스트 변환
         try:
             tables = page.find_tables()
             for table in tables:
@@ -16,9 +69,19 @@ def extract_text(pdf_path):
                     text += "\n" + " | ".join(str(c) for c in row if c)
         except Exception:
             pass
-
         if text:
             result.append({"text": text, "page": page.number + 1})
-
-    doc.close()
     return result
+
+
+def extract_text(pdf_path: str) -> list:
+    doc = fitz.open(pdf_path)
+    try:
+        if _init_surya():
+            try:
+                return _extract_with_surya(doc)
+            except Exception:
+                pass
+        return _extract_with_fitz(doc)
+    finally:
+        doc.close()

@@ -1,3 +1,13 @@
+import os as _os
+_env_path = _os.path.join(_os.path.dirname(__file__), "local.env")
+if _os.path.exists(_env_path):
+    with open(_env_path, encoding="utf-8") as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                _os.environ.setdefault(_k.strip(), _v.strip())
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
