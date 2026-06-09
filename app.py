@@ -7,6 +7,7 @@ if _os.path.exists(_env_path):
             if _line and not _line.startswith("#") and "=" in _line:
                 _k, _v = _line.split("=", 1)
                 _os.environ.setdefault(_k.strip(), _v.strip())
+_os.environ.setdefault("SURYA_DEVICE", "cpu")
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
@@ -85,7 +86,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         tmp.write(content)
         tmp_path = tmp.name
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         await loop.run_in_executor(executor, process_pdf, tmp_path)
     except Exception as e:
@@ -103,28 +104,55 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 
 PROMPTS = [
-    ("summary", """업로드된 강의자료를 요약해줘.
-규칙:
-- 핵심 내용 위주
-- 학생이 이해하기 쉽게 설명
-- 10줄 이내"""),
-    ("concepts", """업로드된 강의자료의 핵심 개념을 정리해줘.
-형식:
-개념명
-설명
+    ("summary", """업로드된 강의자료 전체를 분석해서 아래 형식으로 요약해줘.
 
-개념명
-설명"""),
-    ("exam", """업로드된 강의자료를 기반으로
-객관식 5문제
-주관식 5문제
-생성해줘.
-정답과 해설 포함."""),
+1. 강의 주제 (한 줄)
+2. 학습 목표 (3~5개, 번호 목록)
+3. 섹션별 핵심 내용 (강의 흐름 순서대로)
+4. 중요 포인트 (반드시 기억해야 할 것 5개 이내)
+
+조건:
+- 강의 흐름을 유지하며 요약
+- 전문 용어는 괄호 안에 간단히 설명
+- 학생이 시험 전 복습에 바로 쓸 수 있는 수준"""),
+
+    ("concepts", """업로드된 강의자료에서 핵심 개념을 모두 추출해서 아래 형식으로 정리해줘.
+
+각 개념마다:
+▶ 개념명
+  - 정의: 한 문장으로
+  - 핵심 특징: 2~3가지
+  - 관련 개념: (있으면 명시)
+
+조건:
+- 중요도 높은 순서로 정렬
+- 전문 용어는 쉬운 설명 병기
+- 강의에서 강조된 내용 위주로 선별"""),
+
+    ("exam", """업로드된 강의자료를 기반으로 실제 시험에 나올 법한 문제를 만들어줘.
+
+[객관식 5문제]
+각 문제 형식:
+번호. 문제 내용
+① 보기1 ② 보기2 ③ 보기3 ④ 보기4 ⑤ 보기5
+정답: 번호
+해설: 정답 근거 (강의 내용 기반)
+
+[주관식 5문제]
+각 문제 형식:
+번호. 문제 내용
+모범답안: (핵심 키워드 포함)
+채점 기준: 주요 포인트 2~3개
+
+조건:
+- 강의 핵심 내용에서 골고루 출제
+- 객관식: 명확한 정답, 그럴듯한 오답 포함
+- 주관식: 단순 암기보다 개념 이해를 측정"""),
 ]
 
 
 async def _stream():
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     for type_key, prompt in PROMPTS:
         try:
             result = await loop.run_in_executor(executor, ask_full, prompt)
@@ -221,7 +249,7 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
                 if should_train(student_id):
                     token_queue.put("__TRAIN_READY__")
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         loop.run_in_executor(executor, produce)
 
         train_ready = False
@@ -262,8 +290,8 @@ VIDEO_PROMPT = """너는 업로드된 강의자료 전담 AI 튜터다.
 async def generate_video():
     if not pdf_ready:
         raise HTTPException(status_code=400, detail="PDF 업로드 필요")
-    loop = asyncio.get_event_loop()
-    summary = await loop.run_in_executor(executor, ask, VIDEO_PROMPT)
+    loop = asyncio.get_running_loop()
+    summary = await loop.run_in_executor(executor, ask_full, VIDEO_PROMPT)
     summary = strip_thinking(summary)
     await loop.run_in_executor(executor, create_tts, summary)
     video_path = await loop.run_in_executor(executor, create_video, summary)
@@ -304,7 +332,7 @@ async def generate_qa():
             finally:
                 progress_queue.put((0, 0, True))
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         loop.run_in_executor(executor, produce)
 
         while True:

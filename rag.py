@@ -26,8 +26,8 @@ def _get_context(question, initial_k=20, final_k=3):
     if child_index is None:
         raise RuntimeError("PDF가 업로드되지 않았습니다.")
 
-    q_emb = model.encode([question])
-    _, I = child_index.search(np.array(q_emb), k=min(initial_k, len(children)))
+    q_emb = model.encode([question], normalize_embeddings=True)
+    _, I = child_index.search(np.array(q_emb, dtype="float32"), k=min(initial_k, len(children)))
 
     candidates = [children[idx] for idx in I[0]]
 

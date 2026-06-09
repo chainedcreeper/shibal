@@ -66,7 +66,8 @@ def _extract_with_fitz(doc) -> list:
             for table in tables:
                 rows = table.extract()
                 for row in rows:
-                    text += "\n" + " | ".join(str(c) for c in row if c)
+                    text += "
+" + " | ".join(str(c) for c in row if c)
         except Exception:
             pass
         if text:
