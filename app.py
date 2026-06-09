@@ -208,15 +208,13 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
             buf = ""
             in_think = False
             collected = []
-            # 수준평가 백그라운드 실행 (답변 속도에 영향 없음)
             import threading
             threading.Thread(
                 target=assess_and_update, args=(student_id, msg.message), daemon=True
             ).start()
             try:
-                level_info = None
+                level_info = get_student_level(student_id)
 
-                # 라우팅: 개인 모델 → 서버 → 로컬 순으로 시도
                 if personal_model_exists(student_id):
                     from rag import _get_context
                     ctx = _get_context(msg.message)
@@ -247,26 +245,26 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
                             if start != -1:
                                 if buf[:start]:
                                     token_queue.put(buf[:start])
+                                    collected.append(buf[:start])
                                 buf = buf[start + 7:]
                                 in_think = True
                             else:
                                 safe = max(0, len(buf) - 7)
                                 if buf[:safe]:
                                     token_queue.put(buf[:safe])
+                                    collected.append(buf[:safe])
                                 buf = buf[safe:]
                                 break
                 if buf and not in_think:
                     token_queue.put(buf)
                     collected.append(buf)
             finally:
-                token_queue.put(None)
-                # 상호작용 로그 저장
                 full_answer = "".join(collected)
                 if full_answer:
                     log_interaction(student_id, msg.message, full_answer, source)
-                # 학습 트리거 알림
                 if should_train(student_id):
                     token_queue.put("__TRAIN_READY__")
+                token_queue.put(None)
 
         loop = asyncio.get_running_loop()
         loop.run_in_executor(executor, produce)

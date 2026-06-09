@@ -488,6 +488,16 @@ async function sendChat() {
       body: JSON.stringify({ message: msg })
     });
     document.getElementById(tid)?.remove();
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 401) {
+        addBubble('로그인이 필요합니다. 다시 로그인해 주세요.', false);
+        document.getElementById('authModal').classList.remove('hidden');
+      } else {
+        addBubble(d.detail || '오류가 발생했습니다.', false);
+      }
+      return;
+    }
     const bubbleId = addStreamBubble();
     fetch('/my-level', { headers: authHeader() })
       .then(r => r.json())
