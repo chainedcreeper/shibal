@@ -1,4 +1,6 @@
+import os
 import re
+import tempfile
 import fitz
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
@@ -8,6 +10,7 @@ DPI = 192
 _manager = None
 _predictor = None
 _surya_available = None
+_paddle_ocr = None
 
 
 def _init_surya():
@@ -23,6 +26,18 @@ def _init_surya():
     except Exception:
         _surya_available = False
     return _surya_available
+
+
+def _init_paddle():
+    global _paddle_ocr
+    if _paddle_ocr is not None:
+        return _paddle_ocr
+    try:
+        from paddleocr import PaddleOCR
+        _paddle_ocr = PaddleOCR(lang="korean", show_log=False)
+        return _paddle_ocr
+    except Exception:
+        return None
 
 
 def _html_to_text(html: str) -> str:
@@ -42,9 +57,7 @@ def _page_to_image(page) -> Image.Image:
 def _extract_with_surya(doc) -> list:
     with ThreadPoolExecutor() as executor:
         images = list(executor.map(_page_to_image, list(doc)))
-
     page_results = _predictor(images, full_page=True)
-
     result = []
     for page_num, ocr_result in enumerate(page_results, start=1):
         blocks = sorted(
@@ -54,6 +67,44 @@ def _extract_with_surya(doc) -> list:
         text = "\n".join(_html_to_text(b.html) for b in blocks if b.html).strip()
         if text:
             result.append({"text": text, "page": page_num})
+    return result
+
+
+def _extract_with_paddle(doc) -> list:
+    ocr = _init_paddle()
+    if ocr is None:
+        return []
+    result = []
+    for page in doc:
+        img = _page_to_image(page)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            img.save(tmp_path)
+            try:
+                paddle_result = ocr.predict(tmp_path)
+                text = "\n".join(
+                    line
+                    for pg in (paddle_result or [])
+                    for line in (pg.get("rec_texts") or [])
+                )
+            except (AttributeError, TypeError):
+                paddle_result = ocr.ocr(tmp_path, cls=True)
+                text = "\n".join(
+                    line[1][0]
+                    for pg in (paddle_result or [])
+                    for line in (pg or [])
+                    if line and len(line) >= 2
+                )
+            if text.strip():
+                result.append({"text": text.strip(), "page": page.number + 1})
+        except Exception:
+            pass
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
     return result
 
 
@@ -85,9 +136,14 @@ def extract_text(pdf_path: str) -> list:
             return pages
         if _init_surya():
             try:
-                return _extract_with_surya(doc)
+                surya_pages = _extract_with_surya(doc)
+                if surya_pages:
+                    return surya_pages
             except Exception:
                 pass
+        paddle_pages = _extract_with_paddle(doc)
+        if paddle_pages:
+            return paddle_pages
         return pages
     finally:
         doc.close()
