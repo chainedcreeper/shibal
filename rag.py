@@ -17,24 +17,26 @@ child_index = None
 def process_pdf(pdf_path):
     global parents, children, child_index
     pages = extract_text(pdf_path)
+    if not pages:
+        raise ValueError("PDF에서 텍스트를 추출할 수 없습니다. 이미지 전용 PDF이거나 손상된 파일일 수 있습니다.")
     parents, children = split_text(pages)
+    if not children:
+        raise ValueError("PDF 내용이 너무 짧아 처리할 수 없습니다.")
     embeddings = create_embeddings([c["text"] for c in children])
     child_index = build_index(embeddings)
 
 
 def _get_context(question, initial_k=20, final_k=3):
-    if child_index is None:
+    if child_index is None or not children:
         raise RuntimeError("PDF가 업로드되지 않았습니다.")
 
+    k = min(initial_k, len(children))
     q_emb = model.encode([question], normalize_embeddings=True)
-    _, I = child_index.search(np.array(q_emb, dtype="float32"), k=min(initial_k, len(children)))
+    _, I = child_index.search(np.array(q_emb, dtype="float32"), k=k)
 
-    candidates = [children[idx] for idx in I[0]]
+    candidates = [children[idx] for idx in I[0] if idx < len(children)]
+    top_children = rerank(question, candidates, top_k=min(final_k, len(candidates)))
 
-    # Reranker로 top-k 선별
-    top_children = rerank(question, candidates, top_k=final_k)
-
-    # Parent 청크로 컨텍스트 구성
     context = ""
     seen_parents = set()
     for child in top_children:

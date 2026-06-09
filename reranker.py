@@ -11,6 +11,8 @@ def _get_model():
 
 
 def rerank(query, candidates, top_k=3):
+    if not candidates:
+        return []
     model = _get_model()
     pairs = [(query, c["text"]) for c in candidates]
     scores = model.predict(pairs)
