@@ -66,8 +66,7 @@ def _extract_with_fitz(doc) -> list:
             for table in tables:
                 rows = table.extract()
                 for row in rows:
-                    text += "
-" + " | ".join(str(c) for c in row if c)
+                    text += "\n" + " | ".join(str(c) for c in row if c)
         except Exception:
             pass
         if text:
@@ -75,14 +74,20 @@ def _extract_with_fitz(doc) -> list:
     return result
 
 
+_TEXT_MIN_PER_PAGE = 80
+
 def extract_text(pdf_path: str) -> list:
     doc = fitz.open(pdf_path)
     try:
+        pages = _extract_with_fitz(doc)
+        total = sum(len(p["text"]) for p in pages)
+        if total >= _TEXT_MIN_PER_PAGE * max(1, doc.page_count):
+            return pages
         if _init_surya():
             try:
                 return _extract_with_surya(doc)
             except Exception:
                 pass
-        return _extract_with_fitz(doc)
+        return pages
     finally:
         doc.close()

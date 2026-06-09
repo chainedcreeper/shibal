@@ -22,7 +22,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 
 import rag as rag_module
-from rag import process_pdf, ask, ask_stream, ask_full
+from rag import process_pdf, ask, ask_stream, ask_full, ask_full_stream
 from qa_generator import generate_qa_pairs, save_qa_pairs
 from student_db import init_db, log_interaction, should_train, export_student_data, get_student
 from model_manager import personal_model_exists, ask_personal_stream
@@ -154,12 +154,29 @@ PROMPTS = [
 async def _stream():
     loop = asyncio.get_running_loop()
     for type_key, prompt in PROMPTS:
-        try:
-            result = await loop.run_in_executor(executor, ask_full, prompt)
-            result = strip_thinking(result)
-            yield f"data: {json.dumps({'type': type_key, 'content': result}, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'type': type_key, 'event': 'start'}, ensure_ascii=False)}\n\n"
+        token_queue: queue.Queue = queue.Queue()
+
+        def produce(p=prompt):
+            try:
+                for token in ask_full_stream(p):
+                    token_queue.put(token)
+            except Exception as e:
+                token_queue.put(('__error__', str(e)))
+            finally:
+                token_queue.put(None)
+
+        loop.run_in_executor(executor, produce)
+        while True:
+            item = await loop.run_in_executor(None, token_queue.get)
+            if item is None:
+                break
+            if isinstance(item, tuple):
+                yield f"data: {json.dumps({'type': 'error', 'content': item[1]}, ensure_ascii=False)}\n\n"
+                break
+            yield f"data: {json.dumps({'type': type_key, 'event': 'token', 'token': item}, ensure_ascii=False)}\n\n"
+
+        yield f"data: {json.dumps({'type': type_key, 'event': 'done'}, ensure_ascii=False)}\n\n"
     yield 'data: {"type":"done"}\n\n'
 
 
@@ -352,7 +369,11 @@ async def generate_qa():
 
 @app.get("/favicon.ico")
 async def favicon():
-    return FileResponse("favicon.ico")
+    path = os.path.join(BASE_DIR, "favicon.ico")
+    if os.path.exists(path):
+        return FileResponse(path)
+    from fastapi.responses import Response
+    return Response(status_code=204)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=7860)

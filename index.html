@@ -386,7 +386,7 @@ const ORDER = ['summary', 'concepts', 'exam'];
 function startAnalysis() {
   setBtn('analyzeBtn', false);
   show('progressBox');
-  ORDER.forEach(k => { hide('ph-'+k); hide('ct-'+k); show('ld-'+k); });
+  ORDER.forEach(k => { hide('ph-'+k); hide('ct-'+k); show('ld-'+k); setText('tx-'+k, ''); });
   setStep('summary', 'active');
 
   const es = new EventSource('/analyze');
@@ -396,13 +396,17 @@ function startAnalysis() {
     if (d.type === 'error') { es.close(); setBtn('analyzeBtn', true); return; }
 
     const k = d.type;
-    hide('ld-'+k);
-    setText('tx-'+k, d.content);
-    show('ct-'+k);
-    setStep(k, 'done');
-
-    const next = ORDER[ORDER.indexOf(k) + 1];
-    if (next) setStep(next, 'active');
+    if (d.event === 'start') {
+      setText('tx-'+k, '');
+    } else if (d.event === 'token') {
+      hide('ld-'+k); show('ct-'+k);
+      const el = document.getElementById('tx-'+k);
+      if (el) el.textContent += d.token;
+    } else if (d.event === 'done') {
+      setStep(k, 'done');
+      const next = ORDER[ORDER.indexOf(k) + 1];
+      if (next) setStep(next, 'active');
+    }
   };
   es.onerror = () => { es.close(); setBtn('analyzeBtn', true); };
 }

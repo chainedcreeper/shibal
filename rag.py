@@ -55,12 +55,13 @@ def ask_stream(question, level_info=None):
     yield from ask_qwen_stream(_get_context(question), question, level_info)
 
 
-def ask_full(question, max_tokens=6000):
-    """전체 문서 내용으로 질문 (요약/분석용)"""
+def _full_context(max_chars=6000):
     if not parents:
         raise RuntimeError("PDF가 업로드되지 않았습니다.")
-    full_text = "\n\n".join(
-        f"[p.{p['page']}] {p['text']}" for p in parents
-    )
-    context = full_text[:max_tokens]
-    return ask_qwen(context, question)
+    return "\n\n".join(f"[p.{p['page']}] {p['text']}" for p in parents)[:max_chars]
+
+def ask_full(question, max_tokens=6000):
+    return ask_qwen(_full_context(max_tokens), question)
+
+def ask_full_stream(question, max_tokens=6000):
+    yield from ask_qwen_stream(_full_context(max_tokens), question)
