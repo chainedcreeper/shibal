@@ -9,6 +9,8 @@ if _os.path.exists(_env_path):
                 _os.environ.setdefault(_k.strip(), _v.strip())
 _os.environ.setdefault("SURYA_DEVICE", "cpu")
 
+import queue
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
