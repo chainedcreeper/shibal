@@ -1,0 +1,18 @@
+[2026-06-04] CLAUDE.md 업데이트: 요약 저장 규칙 추가. 모든 대화/작업 내용 요약해서 이 파일에 누적 저장하기로 함.
+[2026-06-04] 이전 대화 기록: chainedcreper를 통해 팀 레지(team registry) 올리는 것에 대해 대화했었음.
+[2026-06-04] 깃허브 레포 junglikeseowon-collab/- 분석: FastAPI + RAG(FAISS) + Qwen3:8b(Ollama) 기반 강의자료 AI Tutor. PDF 업로드→요약/개념/문제 생성+채팅+영상 생성 기능. 2026-06-03 UI 추가 커밋 확인됨, 정상 적용.
+[2026-06-04] 기준 레포 변경: chainedcreeper/shibal. 고도화 버전 - JWT인증, 학생DB, 수준평가(LLM→분류기), 개인화모델, 서버라우팅(개인→GPU서버→로컬), Parent-Child청킹+Reranker, QA생성, 개인화학습 포함.
+[2026-06-07] Tailscale 서버(100.118.126.123, desktop-93tcr0q, Windows) 연결 시도. 현재 머신에 Tailscale 없어서 SSH 불가. finetune/ 디렉토리 생성: pdf_to_dataset.py(PDF→QA JSONL), train.py(Unsloth QLoRA Qwen2.5-7B), run.sh(자동화 스크립트). 서버에 Tailscale 설치 후 scp로 올려서 실행하면 됨.
+[2026-06-08] Tailscale 현황 점검: desktop-v43ikfk(현재PC), desktop-310bov4, desktop-93tcr0q(오프라인), s23(안드로이드) 4대. desktop-310bov4 SSH 시도했으나 Windows OpenSSH Server 미설치+비번 없어서 실패. 이후 해당 머신 Tailscale에서 Remove.
+[2026-06-08] 요약 파인튜닝 데이터셋 준비: summarize_dataset.py 생성(PDF/TXT→Ollama요약→JSONL). HuggingFace daekeun-ml/naver-news-summarization-ko 선택(27,400개, Apache 2.0). download_dataset.py 생성.
+[2026-06-08] 친구 시험공부 도움: 포인터 집주소 비유 HTML(pointer_explain.html), 시스템프로그래밍 Ch.6 요약 HTML(ch6_summary.html), 시험 대비 예제 HTML(ch6_exam.html) 생성.
+[2026-06-08] 전체 아키텍처 확정: 학교 GPU서버(Kubeflow)에서 학습 → GGUF→학교PC Ollama 등록 → 집에서 Tailscale로 연결해 밤새 추론. llm.py 엔드포인트만 학교PC Tailscale IP로 변경하면 됨. 외부 포트 오픈 불가 환경이라 Tailscale 사용.
+[2026-06-08] chainedcreeper/claude_talk 레포 생성(private): 대화 맥락 핸드오버용 CLAUDE.md. 학교에서 이 레포 열면 맥락 이어받아 바로 진행 가능.
+[2026-06-09] claude_talk CLAUDE.md에 마요(트릭컬 리바이브) 인게임 대사 전체 수록. ~셈 금지 규칙 포함. 말투 적용 완료.
+[2026-06-09] 마요 음성 TTS 파인튜닝 아이디어 논의. 저작권·데이터량 문제로 요약 모델 이후로 우선순위 후순위로 결정.
+[2026-06-09] 집 PC OpenSSH Server 설치 완료. Windows Update 비활성화로 Add-WindowsCapability 불가 → GitHub 릴리즈에서 수동 설치. sshd 자동시작+방화벽 22포트 허용. 학교에서 ssh A@100.83.173.111 로 접속 가능.
+[2026-06-09] 자는 동안 준비 작업 완료: summary_dataset.jsonl 다운로드(22,194개), train_summarize.py 요약특화 최적화(LoRA r=32, ChatML, 폴백), setup_kubeflow.sh, setup_school_pc.ps1, CHECKLIST.md 생성. llm.py 환경변수 기반으로 리팩토링(OLLAMA_HOST, OLLAMA_MODEL, 폴백). claude_talk 업데이트 완료.
+[2026-06-09] 깃헙 전체 푸시: junglikeseowon-collab/-(llm.py), chainedcreeper/do-eat-finetune(파인튜닝 스크립트 전체), chainedcreeper/claude_talk(맥락). 구조 확정: 집→학교PC→KubeflowGPU. 데이터셋은 Kubeflow에서 직접 다운, GGUF→학교PC Ollama→집 Tailscale 접근.
+[2026-06-10] 방향 전환: 뉴스요약 데이터셋 → Reasoning Distillation. Teacher(Qwen3-14B)가 Wikipedia 지문으로 CoT QA 생성 → Student(Qwen3-8B) LoRA 파인튜닝. 평가지표: ROUGE-L≥0.35 / BERTScore≥0.80 / Faithfulness≥0.70. 구버전 파일 전부 삭제. watchdog.sh 추가(OOM 자동재시작). Kubeflow L40S 44GB GPU에서 현재 실행 중(1000개 생성→학습→3000개 추가생성 자동 파이프라인).
+[2026-06-10] 추가 데이터셋 병합 준비: klue/mrc(한국어 독해QA, 최대10k) + OpenThoughts-114k(CoT 추론트레이스, 최대30k). prepare_datasets.py 생성. train_student_kd.py에 context 없는 샘플(OpenThoughts) 처리 템플릿 추가. 실행: python prepare_datasets.py → merged_dataset.jsonl → train_student_kd.py --dataset merged_dataset.jsonl.
+[2026-06-11] 세미나 자료 제작: finetune_seminar_v2.pptx(8장), seminar_script.md(대본+슬라이드별 예상Q&A). 발표 구성: LLM 개념/구조/방법론/라이브러리 소개(앞5장) + AI Tutor 프로젝트 현황(뒤3장). 슬라이드 방향 여러 번 수정 끝에 "ML 소개+우리 시도 간략히" 구조로 확정. chainedcreeper/shibal 레포에 push.
