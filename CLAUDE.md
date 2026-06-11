@@ -7,26 +7,33 @@
 
 ## 목표
 
-`junglikeseowon-collab/-` 레포 (FastAPI + Ollama 기반 AI Tutor)에
-**요약 특화 파인튜닝 모델**을 붙이는 것.
+`pj (shibal)` 레포 (FastAPI + Ollama 기반 AI Tutor)에
+**Knowledge Distillation으로 파인튜닝된 경량 모델**을 붙이는 것.
 
-현재 `llm.py`는 `qwen3:8b` (Ollama, localhost:11434) 사용 중.
-파인튜닝 후 모델명만 교체하면 끝.
+- 교사 모델: `Qwen/Qwen3-14B` → CoT QA 데이터 생성
+- 학생 모델: `Qwen/Qwen3-8B` → 교사 데이터로 LoRA 파인튜닝
+- 결과: GGUF Q4_K_M 변환 → 집 PC Ollama (8GB VRAM) 에서 구동
+- 최종: `llm.py`의 모델명만 교체하면 끝
+
+### 2단계 개인화 설계
+- **1단계 (현재)**: 베이스 모델 — 일반 강의 QA 능력 탑재
+- **2단계 (추후)**: 개인화 레이어 — 학생 수준(입문/중급/심화)별 추가 파인튜닝
+  - `pj`의 `level_assessor.py`가 수준 판단 → 시스템 프롬프트 주입
 
 ---
 
 ## 파인튜닝 파일 위치
 
-`C:\Users\A\OneDrive\Desktop\do_eat\finetune\`
+**로컬**: `C:\Users\107\Desktop\do-eat-finetune-tmp\`
+**GitHub**: `chainedcreeper/do-eat-finetune`
+**Kubeflow**: `~/do-eat-finetune/`
 
 | 파일 | 역할 |
 |---|---|
-| `download_dataset.py` | HuggingFace 네이버 뉴스 요약 데이터셋 다운로드 → JSONL |
-| `summarize_dataset.py` | PDF/TXT → Ollama로 요약 쌍 생성 → JSONL |
-| `train.py` | QLoRA 파인튜닝 (Unsloth, Qwen2.5-7B-Instruct) → GGUF 변환 |
-| `requirements.txt` | 의존성 |
+| `generate_kd_dataset.py` | Qwen3-14B(vLLM)로 위키피디아 → CoT QA 5,000개 생성 |
+| `train_student_kd.py` | Qwen3-8B LoRA fp16 파인튜닝 + ROUGE-L/BERTScore 평가 |
 
-데이터셋: `daekeun-ml/naver-news-summarization-ko` (27,400개 뉴스+요약, Apache 2.0)
+질문 템플릿 4종: 핵심 개념 설명 / 입문자용 설명 / 예상 시험 문제 / 원리 단계별 설명
 
 ---
 
@@ -293,51 +300,61 @@ git push project1 master:main
 
 ---
 
-## 학교 작업 현황 (2026-06-09)
+## KD 파이프라인 현황 (2026-06-11 집 세션)
 
-### 완료된 것
-- Kubeflow (`https://220.90.190.241/`) 접속 확인 (testuser/qwer)
-- Notebook `explain123` 생성 — `kubeflownotebookswg/jupyter-pytorch-cuda-full:v1.9.0`, GPU 1개, RAM 24Gi, 볼륨 50Gi
-- `chainedcreeper/do-eat-finetune` 리포 Kubeflow에 git clone 완료
-- `summary_dataset.jsonl` — `download_dataset.py`로 Kubeflow에서 직접 다운로드 완료
-- `train_summarize.py` — bitsandbytes/unsloth 완전 제거, **fp16 LoRA**로 재작성 후 push
+### Kubeflow 상태
+- **URL**: `https://220.90.190.241/` (testuser/qwer)
+- **Notebook**: `explain123` (GPU L40S 48GB)
+- **가상환경**: `~/train_env` (vLLM, torch, peft, trl 설치 완료)
 
-### train_summarize.py 최종 상태
-- **bitsandbytes 없음** (CUDA 12.4 환경에서 0.46.1+ 요구 → CUDA 13 필요 → 충돌)
-- **unsloth 없음** (torch.int1 = torch 2.6+ 필요, 환경은 2.12.0+cu124지만 torchao 충돌)
-- fp16 + gradient_checkpointing + LoRA r=32
-- optim: `adamw_torch`
-- 48GB VRAM에서 정상 동작 예상
+### 현재 실행 중
+```
+PID 9400 — generate_kd_dataset.py --target 5000
+로그: ~/gen_log.txt
+체크포인트: ~/do-eat-finetune/kd_checkpoint.json
+기존 데이터: kd_dataset.jsonl 990개 (articles 0~299 완료)
+```
 
-### 현재 상태 (2026-06-09 학교 작업 종료 시점)
-- 가상환경 `~/train_env` 생성 완료 (torch 2.5.1+cu124, transformers, peft, trl, datasets)
-- `summary_dataset.jsonl` 22,194개 `~/do-eat-finetune/`에 다운로드 완료
-- `train_summarize.py` 실행 중 — 모델 로딩(`Loading checkpoint shards 100%`) 완료, 학습 시작 직전
-- **집에서 Kubeflow 접속해서 학습 완료 여부 확인 필요**
+상태 확인:
+```bash
+tail -20 ~/gen_log.txt
+wc -l ~/do-eat-finetune/kd_dataset.jsonl
+```
 
-### 학습 재실행 명령어 (학습 끊겼을 경우)
+### generate_kd_dataset.py 핵심 설정
+- **교사 모델**: Qwen/Qwen3-14B (vLLM, fp16, gpu_memory_utilization=0.85)
+- **Flash Attention 2**: vLLM이 자동으로 사용
+- **batch_size**: 32 (vLLM 내부 스케줄링)
+- **max_tokens**: 512
+- **CoT**: `/no_think` 제거됨 → `<think>` 추론 흔적 생성
+- **체크포인트**: 배치마다 저장 → 재시작 시 자동 이어서
+
+### 데이터 생성 완료 후 할 것
 ```bash
 cd ~/do-eat-finetune
 source ~/train_env/bin/activate
-python train_summarize.py --dataset summary_dataset.jsonl --epochs 3 --lora-r 32
+nohup python train_student_kd.py --dataset kd_dataset.jsonl --epochs 3 --lora-r 32 > ~/train_log.txt 2>&1 &
 ```
 
-### 집에서 해야 할 것
-1. 학습 완료 확인 — Kubeflow Notebook 터미널 접속해서 결과 확인
-2. 학습 완료 시: `summarizer_model_gguf/` 생성 여부 확인
-3. GGUF → 학교 PC Ollama 등록: `ollama create summary-tutor -f ./summarizer_model_gguf/Modelfile`
-4. 집 PC에서 Tailscale로 연결 테스트: `http://100.xx.xx.xx:11434`
-5. `llm.py` 엔드포인트/모델명 변경
+### 학습 완료 후 할 것
+```bash
+# GGUF 변환
+git clone https://github.com/ggerganov/llama.cpp
+pip install -r llama.cpp/requirements.txt
+python llama.cpp/convert_hf_to_gguf.py ./student_kd_model --outtype q4_k_m
+
+# 집 PC Ollama 등록 (Tailscale로 파일 전송 후)
+ollama create reasoning-tutor -f ./student_kd_model/Modelfile
+
+# pj llm.py 모델명 교체
+"model": "reasoning-tutor"
+```
 
 ### 환경 정보
-- Kubeflow torch: `2.12.0+cu124`
-- CUDA: 12.4
-- transformers: `5.10.2`
-- peft: 최신 (0.14+)
-- bitsandbytes: **미사용**
-
-### 데이터셋
-- `summary_dataset.jsonl` — Kubeflow `/home/jovyan/do-eat-finetune/` 에 있음 (22,194개)
+- Kubeflow CUDA: 12.4
+- vLLM: 0.22.1
+- bitsandbytes: 미사용 (CUDA 12.4 환경 충돌)
+- Flash Attention 2: vLLM 자동 적용
 
 ---
 
