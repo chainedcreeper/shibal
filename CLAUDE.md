@@ -300,25 +300,32 @@ git push project1 master:main
 
 ---
 
-## KD 파이프라인 현황 (2026-06-11 집 세션)
+## KD 파이프라인 현황 (2026-06-11 집 세션 2차)
 
 ### Kubeflow 상태
 - **URL**: `https://220.90.190.241/` (testuser/qwer)
 - **Notebook**: `explain123` (GPU L40S 48GB)
 - **가상환경**: `~/train_env` (vLLM, torch, peft, trl 설치 완료)
 
-### 현재 실행 중
+### 현재 실행 중 (오전 11시 재시작)
 ```
-PID 9400 — generate_kd_dataset.py --target 5000
+PID 10924 — generate_kd_dataset.py --target 5000 (article 300부터 이어서)
+PID 10925 — 감시 loop (생성 완료 → 학습 자동 시작 → Discord 알림)
 로그: ~/gen_log.txt
 체크포인트: ~/do-eat-finetune/kd_checkpoint.json
 기존 데이터: kd_dataset.jsonl 990개 (articles 0~299 완료)
+예상 완료: 오후 2시
 ```
+
+### 이전 실패 원인 (PID 10414)
+모델 로딩 중(safetensors 50%) 프로세스 사망. 코드 버그 아님, Kubeflow 세션 타임아웃 추정.
+데이터는 990개 보존됨 (체크포인트 정상).
 
 상태 확인:
 ```bash
-tail -20 ~/gen_log.txt
+kill -0 10924 && echo "생성 중" || echo "죽음"
 wc -l ~/do-eat-finetune/kd_dataset.jsonl
+tail -5 ~/gen_log.txt
 ```
 
 ### generate_kd_dataset.py 핵심 설정
@@ -330,7 +337,7 @@ wc -l ~/do-eat-finetune/kd_dataset.jsonl
 - **체크포인트**: 배치마다 저장 → 재시작 시 자동 이어서
 
 ### 데이터 생성 완료 후 — 학습 자동 시작 설정 완료
-생성(PID 9400) 완료 시 자동으로 학습 시작 + 디스코드 알림 오도록 설정됨.
+생성(PID 10924) 완료 시 자동으로 학습 시작 + 디스코드 알림 오도록 설정됨.
 학습 완료 알림: Discord 웹훅 (채널 등록됨)
 
 학습 로그 확인:
