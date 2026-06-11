@@ -1,5 +1,5 @@
 """
-LLM 소개 세미나 PPT — 8장
+머신러닝 해보기 세미나 PPT — 9장
 python make_pptx2.py
 """
 from pptx import Presentation
@@ -46,7 +46,7 @@ def box(slide, l, t, w, h, fill=None, line=None, lw=Pt(1)):
     return s
 
 def T(slide, t, l, top, w, h,
-      size=Pt(18), bold=False, color=TEXT, align=PP_ALIGN.LEFT):
+      size=Pt(16), bold=False, color=TEXT, align=PP_ALIGN.LEFT):
     tb = slide.shapes.add_textbox(l, top, w, h)
     tb.word_wrap = True
     tf = tb.text_frame; tf.word_wrap = True
@@ -56,7 +56,7 @@ def T(slide, t, l, top, w, h,
     r.font.bold = bold; r.font.color.rgb = color
     return tb
 
-def ML(slide, items, l, top, w, h, size=Pt(16), color=TEXT_SUB):
+def ML(slide, items, l, top, w, h, size=Pt(14), color=TEXT_SUB):
     tb = slide.shapes.add_textbox(l, top, w, h)
     tb.word_wrap = True
     tf = tb.text_frame; tf.word_wrap = True
@@ -78,540 +78,466 @@ def hdr(slide, title, subtitle=None):
     bg(slide)
     box(slide, 0, 0, W, Inches(0.1), fill=BLUE_MID)
     T(slide, title,
-      Inches(0.7), Inches(0.22), Inches(11.9), Inches(0.52),
+      Inches(0.7), Inches(0.2), Inches(11.9), Inches(0.52),
       size=Pt(28), bold=True, color=TEXT)
     if subtitle:
         T(slide, subtitle,
-          Inches(0.7), Inches(0.76), Inches(11.9), Inches(0.3),
+          Inches(0.7), Inches(0.74), Inches(11.9), Inches(0.3),
           size=Pt(14), color=DIM)
-        box(slide, Inches(0.7), Inches(1.1), Inches(12.0), Pt(1.2), fill=BLUE_MID)
-        return Inches(1.28)
-    box(slide, Inches(0.7), Inches(0.78), Inches(12.0), Pt(1.2), fill=BLUE_MID)
-    return Inches(0.96)
+        box(slide, Inches(0.7), Inches(1.08), Inches(12.0), Pt(1.2), fill=BLUE_MID)
+        return Inches(1.25)
+    box(slide, Inches(0.7), Inches(0.76), Inches(12.0), Pt(1.2), fill=BLUE_MID)
+    return Inches(0.94)
 
 
-# ════════════════════════════════════════════════════
-# S1 — 타이틀
-# ════════════════════════════════════════════════════
+# ── S1 타이틀 ─────────────────────────────────────────────────────────
 def s1(prs):
     slide = new_slide(prs)
     bg(slide, BG_DARK)
     box(slide, 0, 0, W, Inches(0.18), fill=BLUE_MID)
     box(slide, 0, Inches(7.32), W, Inches(0.18), fill=BLUE_MID)
 
-    T(slide, "LLM, 어떻게 활용할 수 있을까",
-      Inches(1.4), Inches(1.7), Inches(10.5), Inches(0.7),
-      size=Pt(28), color=DIM)
-    T(slide, "개념부터 생태계까지",
-      Inches(1.4), Inches(2.35), Inches(10.5), Inches(1.1),
-      size=Pt(56), bold=True, color=BLUE)
-    T(slide, "2026. 06. 11",
+    T(slide, "머신러닝 해보기",
+      Inches(1.4), Inches(2.0), Inches(10.5), Inches(1.2),
+      size=Pt(64), bold=True, color=BLUE)
+    T(slide, "LLM 파인튜닝 시도기  —  Knowledge Distillation + LoRA",
+      Inches(1.4), Inches(3.3), Inches(10.5), Inches(0.45),
+      size=Pt(18), color=DIM)
+    T(slide, "2026. 06. 12",
       Inches(1.4), Inches(6.88), Inches(4), Inches(0.35),
-      size=Pt(14), color=DIM)
+      size=Pt(13), color=DIM)
 
 
-# ════════════════════════════════════════════════════
-# S2 — 머신러닝 / LLM 이란?
-# ════════════════════════════════════════════════════
+# ── S2 파인튜닝이란? ─────────────────────────────────────────────────
 def s2(prs):
     slide = new_slide(prs)
-    y0 = hdr(slide, "머신러닝과 LLM")
+    y0 = hdr(slide, "파인튜닝이란?", "Fine-tuning")
 
-    # 왼쪽: ML 개념
-    box(slide, Inches(0.7), y0+Inches(0.15),
-        Inches(5.7), Inches(5.6),
-        fill=CARD, line=BORDER)
-    T(slide, "머신러닝",
-      Inches(1.0), y0+Inches(0.38),
-      Inches(5.1), Inches(0.5),
-      size=Pt(26), bold=True, color=BLUE)
-    ML(slide, [
-        "데이터로부터 규칙을 스스로 학습",
-        "",
-        ("지도학습", True, BLUE),
-        "  정답 레이블로 학습  →  분류, 예측",
-        ("비지도학습", True, BLUE),
-        "  레이블 없이 패턴 발견  →  클러스터링",
-        ("강화학습", True, BLUE),
-        "  보상 신호로 행동 최적화",
-        "",
-        ("딥러닝", True, ORANGE),
-        "  신경망 기반 머신러닝",
-        "  이미지·음성·텍스트 처리에 강함",
-    ], Inches(1.0), y0+Inches(0.98),
-       Inches(5.1), Inches(4.3),
-       size=Pt(15), color=TEXT_SUB)
-
-    # 오른쪽: LLM 개념
-    box(slide, Inches(6.73), y0+Inches(0.15),
-        Inches(5.93), Inches(5.6),
+    # 정의
+    box(slide, Inches(0.7), y0+Inches(0.18),
+        Inches(12.0), Inches(1.1),
         fill=RGBColor(0x0f,0x1a,0x30), line=BLUE_MID)
-    T(slide, "LLM",
-      Inches(7.03), y0+Inches(0.38),
-      Inches(5.3), Inches(0.5),
-      size=Pt(26), bold=True, color=BLUE)
-    T(slide, "Large Language Model",
-      Inches(7.03), y0+Inches(0.88),
-      Inches(5.3), Inches(0.3),
-      size=Pt(14), color=DIM)
+    T(slide,
+      "사전학습된 LLM을 우리 목적에 맞게 추가 학습하는 것",
+      Inches(0.95), y0+Inches(0.35),
+      Inches(11.5), Inches(0.55),
+      size=Pt(22), bold=True, color=BLUE)
+
+    # 왼쪽: 왜 필요한가
+    box(slide, Inches(0.7), y0+Inches(1.45),
+        Inches(5.7), Inches(4.3),
+        fill=RGBColor(0x25,0x10,0x10), line=RED, lw=Pt(1.5))
+    T(slide, "범용 LLM의 한계",
+      Inches(0.95), y0+Inches(1.62),
+      Inches(5.2), Inches(0.4),
+      size=Pt(18), bold=True, color=RED)
     ML(slide, [
-        "수천억 개 텍스트로 사전학습된",
-        "초거대 언어 모델",
-        "",
-        ("대표 모델", True, BLUE),
-        "  GPT-4, Claude, Gemini  (클로즈드)",
-        "  LLaMA, Qwen, Mistral   (오픈소스)",
-        "",
-        ("핵심 능력", True, BLUE),
-        "  자연어 이해 & 생성",
-        "  지식 내재화",
-        "  다양한 태스크 범용 처리",
-        "",
-        "학습 데이터: 인터넷 텍스트 수조 토큰",
-        "파라미터:   수십억 ~ 수천억 개",
-    ], Inches(7.03), y0+Inches(1.22),
-       Inches(5.3), Inches(4.2),
-       size=Pt(15), color=TEXT_SUB)
+        "•  도메인 지식 부족",
+        "•  할루시네이션  (지문 벗어난 내용 지어냄)",
+        "•  추론 없이 단답만 뱉음",
+        "•  서버 24시간 운용 현실적으로 불가",
+    ], Inches(0.95), y0+Inches(2.1),
+       Inches(5.2), Inches(3.0),
+       size=Pt(16), color=TEXT_SUB)
 
-
-# ════════════════════════════════════════════════════
-# S3 — LLM 동작 구조
-# ════════════════════════════════════════════════════
-def s3(prs):
-    slide = new_slide(prs)
-    y0 = hdr(slide, "LLM 동작 구조", "Transformer 기반 언어 모델")
-
-    # Transformer 구조 개념
-    box(slide, Inches(0.7), y0+Inches(0.15),
-        Inches(5.7), Inches(5.45),
-        fill=CARD, line=BORDER)
-    T(slide, "Transformer",
-      Inches(1.0), y0+Inches(0.35),
-      Inches(5.1), Inches(0.48),
-      size=Pt(24), bold=True, color=PURPLE)
-    ML(slide, [
-        "LLM의 핵심 구조 (2017, Google)",
-        "",
-        ("Self-Attention", True, PURPLE),
-        "  입력 토큰들 간 관계를 학습",
-        "  멀리 떨어진 단어도 연결 가능",
-        "",
-        ("Feed-Forward Network", True, PURPLE),
-        "  각 토큰의 표현을 변환",
-        "",
-        ("레이어를 쌓을수록", True, PURPLE),
-        "  추상적인 개념 표현 가능",
-        "  7B = 약 32개 레이어",
-    ], Inches(1.0), y0+Inches(0.93),
-       Inches(5.1), Inches(4.2),
-       size=Pt(15), color=TEXT_SUB)
-
-    # 학습 과정
-    box(slide, Inches(6.73), y0+Inches(0.15),
-        Inches(5.93), Inches(2.55),
-        fill=RGBColor(0x11,0x1e,0x11), line=RGBColor(0x2a,0x5c,0x2a))
-    T(slide, "사전학습 (Pre-training)",
-      Inches(7.03), y0+Inches(0.35),
-      Inches(5.3), Inches(0.4),
+    # 오른쪽: 우리가 선택한 방식
+    box(slide, Inches(6.73), y0+Inches(1.45),
+        Inches(5.97), Inches(4.3),
+        fill=RGBColor(0x11,0x1e,0x11), line=GREEN, lw=Pt(1.5))
+    T(slide, "우리가 선택한 방식",
+      Inches(6.98), y0+Inches(1.62),
+      Inches(5.47), Inches(0.4),
       size=Pt(18), bold=True, color=GREEN)
     ML(slide, [
-        "다음 토큰 예측을 반복하며 언어 습득",
-        "수천억 토큰  ·  수백만 달러  ·  수 개월",
-        "→  GPT, LLaMA 등 베이스 모델 탄생",
-    ], Inches(7.03), y0+Inches(0.85),
-       Inches(5.3), Inches(1.6),
-       size=Pt(14.5), color=TEXT_SUB)
-
-    box(slide, Inches(6.73), y0+Inches(2.85),
-        Inches(5.93), Inches(2.75),
-        fill=RGBColor(0x0f,0x1a,0x30), line=BORDER)
-    T(slide, "토큰화 & 추론",
-      Inches(7.03), y0+Inches(3.05),
-      Inches(5.3), Inches(0.4),
-      size=Pt(18), bold=True, color=BLUE)
-    ML(slide, [
-        "텍스트  →  토큰(숫자) 변환",
-        "한국어 1글자  ≈  1~3 토큰",
+        ("Knowledge Distillation", True, ORANGE),
+        "  큰 모델(Teacher)의 추론 과정을",
+        "  작은 모델(Student)에 이식",
         "",
-        "토큰을 하나씩 순서대로 생성",
-        "Greedy / Sampling / Beam Search",
-        "temperature로 창의성 조절",
-    ], Inches(7.03), y0+Inches(3.55),
-       Inches(5.3), Inches(1.9),
-       size=Pt(14.5), color=TEXT_SUB)
+        ("LoRA", True, GREEN),
+        "  모델 전체가 아닌 작은 보정 행렬만 학습",
+        "  48GB VRAM으로 충분히 가능",
+    ], Inches(6.98), y0+Inches(2.1),
+       Inches(5.47), Inches(3.0),
+       size=Pt(16), color=TEXT_SUB)
 
 
-# ════════════════════════════════════════════════════
-# S4 — LLM 성능 향상 방법들
-# ════════════════════════════════════════════════════
+# ── S4 파인튜닝이 뭔지 ────────────────────────────────────────────────
 def s4(prs):
     slide = new_slide(prs)
-    y0 = hdr(slide, "LLM 활용 & 성능 향상 방법")
+    y0 = hdr(slide, "파인튜닝 — Knowledge Distillation + LoRA")
 
-    methods = [
-        ("프롬프트\n엔지니어링", TEAL, RGBColor(0x0f,0x1e,0x1e), RGBColor(0x2a,0x5c,0x5c),
-         [
-             "비용  없음",
-             "난이도  낮음",
-             "",
-             "시스템 프롬프트",
-             "Few-shot 예시",
-             "Chain-of-Thought",
-             "Role prompting",
-             "",
-             "한계: 모델 능력",
-             "자체는 그대로",
-         ]),
-        ("RAG", BLUE, RGBColor(0x0f,0x1a,0x30), BORDER,
-         [
-             "비용  서버",
-             "난이도  중간",
-             "",
-             "외부 문서 검색",
-             "→ 컨텍스트로 주입",
-             "",
-             "최신 정보 반영",
-             "할루시네이션 감소",
-             "",
-             "한계: 검색 실패 시",
-             "여전히 취약",
-         ]),
-        ("파인튜닝", GREEN, RGBColor(0x11,0x1e,0x11), RGBColor(0x2a,0x5c,0x2a),
-         [
-             "비용  GPU",
-             "난이도  중간",
-             "",
-             "LoRA / QLoRA",
-             "도메인 특화 학습",
-             "포맷·스타일 고정",
-             "",
-             "모델 능력 자체",
-             "향상 가능",
-             "",
-             "데이터 품질이 전부",
-         ]),
-        ("에이전트\n/ 툴 사용", ORANGE, RGBColor(0x1e,0x14,0x08), RGBColor(0x5c,0x3a,0x0d),
-         [
-             "비용  API",
-             "난이도  중간~높음",
-             "",
-             "웹 검색, 코드 실행",
-             "DB 조회, API 호출",
-             "",
-             "LangChain",
-             "LlamaIndex",
-             "AutoGen",
-             "",
-             "복잡한 태스크 처리",
-         ]),
-        ("지식 증류\n(KD)", PURPLE, RGBColor(0x1a,0x11,0x2a), RGBColor(0x5a,0x2a,0x8a),
-         [
-             "비용  Teacher GPU",
-             "난이도  높음",
-             "",
-             "큰 모델 → 작은 모델",
-             "추론 능력 이식",
-             "",
-             "CoT Distillation",
-             "<think> 포함 학습",
-             "",
-             "DeepSeek-R1",
-             "Qwen3 distill",
-         ]),
-    ]
+    # KD
+    box(slide, Inches(0.7), y0+Inches(0.15),
+        Inches(5.87), Inches(5.5),
+        fill=RGBColor(0x1a,0x14,0x0a), line=RGBColor(0x5a,0x3a,0x10))
+    T(slide, "Knowledge Distillation",
+      Inches(0.95), y0+Inches(0.32),
+      Inches(5.37), Inches(0.48),
+      size=Pt(22), bold=True, color=ORANGE)
+    T(slide, "지식 증류",
+      Inches(0.95), y0+Inches(0.82),
+      Inches(5.37), Inches(0.3),
+      size=Pt(14), color=DIM)
+    box(slide, Inches(0.95), y0+Inches(1.18),
+        Inches(5.37), Pt(1), fill=ORANGE)
+    ML(slide, [
+        "큰 모델(Teacher)의 지식을",
+        "작은 모델(Student)에 이식",
+        "",
+        ("Teacher  :  Qwen3-14B", False, ORANGE),
+        ("Student  :  Qwen3-8B", False, TEXT_SUB),
+        "",
+        "단순 정답이 아니라",
+        "<think> 추론 과정까지 학습",
+        "→  Reasoning Distillation",
+        "",
+        "DeepSeek-R1, Qwen3 distill도",
+        "이 방식으로 만들어진 모델",
+    ], Inches(0.95), y0+Inches(1.35),
+       Inches(5.37), Inches(3.8),
+       size=Pt(15), color=TEXT_SUB)
 
-    cw = Inches(2.3); ch = Inches(5.45)
-    cx = Inches(0.7)
-    for name, acc, bg_c, bd, bullets in methods:
-        box(slide, cx, y0+Inches(0.12), cw, ch, fill=bg_c, line=bd, lw=Pt(1.5))
-        T(slide, name,
-          cx+Inches(0.15), y0+Inches(0.28),
-          cw-Inches(0.3), Inches(0.75),
-          size=Pt(17), bold=True, color=acc, align=PP_ALIGN.CENTER)
-        box(slide, cx+Inches(0.15), y0+Inches(1.08),
-            cw-Inches(0.3), Pt(1), fill=acc)
-        ML(slide, bullets,
-           cx+Inches(0.15), y0+Inches(1.22),
-           cw-Inches(0.3), ch-Inches(1.35),
-           size=Pt(13), color=TEXT_SUB)
-        cx += cw + Inches(0.2)
+    # LoRA
+    box(slide, Inches(6.83), y0+Inches(0.15),
+        Inches(5.87), Inches(5.5),
+        fill=RGBColor(0x11,0x1e,0x11), line=RGBColor(0x2a,0x5c,0x2a))
+    T(slide, "LoRA",
+      Inches(7.08), y0+Inches(0.32),
+      Inches(5.37), Inches(0.48),
+      size=Pt(22), bold=True, color=GREEN)
+    T(slide, "Low-Rank Adaptation",
+      Inches(7.08), y0+Inches(0.82),
+      Inches(5.37), Inches(0.3),
+      size=Pt(14), color=DIM)
+    box(slide, Inches(7.08), y0+Inches(1.18),
+        Inches(5.37), Pt(1), fill=GREEN)
+    ML(slide, [
+        "모델 전체를 학습하는 대신",
+        "내부 행렬 옆에 작은 보정 행렬",
+        "두 개(A, B)만 추가해서 학습",
+        "",
+        ("W'  =  W₀  +  B · A", True, YELLOW),
+        "",
+        "W₀는 고정  →  A, B만 업데이트",
+        "전체 파라미터의 0.3%만 학습",
+        "",
+        ("Full FT  :  ~112GB VRAM", False, RED),
+        ("LoRA     :  ~28GB VRAM", False, GREEN),
+        "",
+        "48GB 서버에서 가능한 이유",
+    ], Inches(7.08), y0+Inches(1.35),
+       Inches(5.37), Inches(3.8),
+       size=Pt(15), color=TEXT_SUB)
 
 
-# ════════════════════════════════════════════════════
-# S5 — 라이브러리 & 도구
-# ════════════════════════════════════════════════════
+# ── S5 어떻게 할 건지 ─────────────────────────────────────────────────
 def s5(prs):
     slide = new_slide(prs)
-    y0 = hdr(slide, "라이브러리 & 도구 생태계")
+    y0 = hdr(slide, "어떻게 할 건지 — 전체 파이프라인")
 
-    # 학습 도구
-    box(slide, Inches(0.7), y0+Inches(0.15),
-        Inches(5.8), Inches(2.55),
-        fill=CARD, line=BORDER)
-    T(slide, "학습",
-      Inches(1.0), y0+Inches(0.3),
-      Inches(5.2), Inches(0.38),
-      size=Pt(18), bold=True, color=BLUE)
-    train_libs = [
-        ("PEFT",    "HuggingFace 공식  LoRA 구현 표준",           BLUE),
-        ("TRL",     "SFT · DPO · RLHF 통합 학습",                PURPLE),
-        ("Unsloth", "LoRA 2~5배 가속  Flash Attention 내장",       GREEN),
-        ("Axolotl", "YAML 설정만으로 파인튜닝  멀티GPU 지원",      TEAL),
-    ]
-    for i, (name, desc, acc) in enumerate(train_libs):
-        ry = y0+Inches(0.78)+Inches(0.42)*i
-        T(slide, name, Inches(1.0), ry, Inches(1.3), Inches(0.38),
-          size=Pt(14), bold=True, color=acc)
-        T(slide, desc, Inches(2.4), ry, Inches(3.8), Inches(0.38),
-          size=Pt(13), color=DIM)
-
-    # 서빙 도구
-    box(slide, Inches(0.7), y0+Inches(2.85),
-        Inches(5.8), Inches(2.75),
-        fill=CARD, line=BORDER)
-    T(slide, "서빙",
-      Inches(1.0), y0+Inches(3.0),
-      Inches(5.2), Inches(0.38),
-      size=Pt(18), bold=True, color=ORANGE)
-    serve_libs = [
-        ("llama.cpp", "C++ 추론 엔진  GGUF 양자화 포맷",          ORANGE),
-        ("Ollama",    "로컬 LLM 서버  설치 1분  REST API",         YELLOW),
-        ("vLLM",      "고성능 서버  PagedAttention  OpenAI 호환",  RED),
-        ("LM Studio", "GUI 기반 로컬 실행  프로토타이핑용",         DIM),
-    ]
-    for i, (name, desc, acc) in enumerate(serve_libs):
-        ry = y0+Inches(3.52)+Inches(0.42)*i
-        T(slide, name, Inches(1.0), ry, Inches(1.5), Inches(0.38),
-          size=Pt(14), bold=True, color=acc)
-        T(slide, desc, Inches(2.6), ry, Inches(3.6), Inches(0.38),
-          size=Pt(13), color=DIM)
-
-    # 오른쪽: 프레임워크 & 데이터
-    box(slide, Inches(6.73), y0+Inches(0.15),
-        Inches(5.93), Inches(2.55),
-        fill=CARD, line=BORDER)
-    T(slide, "에이전트 프레임워크",
-      Inches(7.03), y0+Inches(0.3),
-      Inches(5.3), Inches(0.38),
-      size=Pt(18), bold=True, color=TEAL)
-    agent_libs = [
-        ("LangChain",   "LLM 앱 구축 표준  RAG·에이전트·툴",    TEAL),
-        ("LlamaIndex",  "문서 기반 RAG 특화",                    TEAL),
-        ("AutoGen",     "멀티 에이전트 자동화  Microsoft",        TEAL),
-    ]
-    for i, (name, desc, acc) in enumerate(agent_libs):
-        ry = y0+Inches(0.78)+Inches(0.52)*i
-        T(slide, name, Inches(7.03), ry, Inches(1.6), Inches(0.45),
-          size=Pt(14), bold=True, color=acc)
-        T(slide, desc, Inches(8.73), ry, Inches(3.8), Inches(0.45),
-          size=Pt(13), color=DIM)
-
-    box(slide, Inches(6.73), y0+Inches(2.85),
-        Inches(5.93), Inches(2.75),
-        fill=CARD, line=BORDER)
-    T(slide, "평가 & 데이터",
-      Inches(7.03), y0+Inches(3.0),
-      Inches(5.3), Inches(0.38),
-      size=Pt(18), bold=True, color=PURPLE)
-    eval_libs = [
-        ("HuggingFace Hub",  "모델·데이터셋 허브  가장 큰 공개 저장소", PURPLE),
-        ("ROUGE / BERTScore","텍스트 생성 품질 평가 지표",               PURPLE),
-        ("Weights & Biases", "학습 과정 시각화  실험 관리",               PURPLE),
-    ]
-    for i, (name, desc, acc) in enumerate(eval_libs):
-        ry = y0+Inches(3.52)+Inches(0.52)*i
-        T(slide, name, Inches(7.03), ry, Inches(2.0), Inches(0.45),
-          size=Pt(13), bold=True, color=acc)
-        T(slide, desc, Inches(9.13), ry, Inches(3.3), Inches(0.45),
-          size=Pt(12.5), color=DIM)
-
-
-# ════════════════════════════════════════════════════
-# S6 — 우리 프로젝트 (키워드 위주)
-# ════════════════════════════════════════════════════
-def s6(prs):
-    slide = new_slide(prs)
-    y0 = hdr(slide, "AI Tutor", "강의자료 기반 질의응답 시스템")
-
-    # 왼쪽: 구성
-    box(slide, Inches(0.7), y0+Inches(0.15),
-        Inches(7.5), Inches(5.5),
-        fill=CARD, line=BORDER)
-
-    components = [
-        ("FastAPI",          "백엔드 서버",                    BLUE),
-        ("FAISS",            "벡터 DB  ·  유사도 검색",        TEAL),
-        ("BGE Reranker",     "검색 결과 재순위",               PURPLE),
-        ("Parent-Child 청킹", "문서 구조 보존 청킹",           DIM),
-        ("Qwen3-8B / Ollama","로컬 LLM 추론",                 GREEN),
-        ("JWT 인증",          "학생 개인화",                   ORANGE),
-    ]
-    T(slide, "구성 요소",
-      Inches(1.0), y0+Inches(0.3),
-      Inches(6.8), Inches(0.4),
-      size=Pt(17), bold=True, color=BLUE)
-    for i, (name, desc, acc) in enumerate(components):
-        ry = y0+Inches(0.85)+Inches(0.78)*i
-        box(slide, Inches(1.0), ry, Inches(2.2), Inches(0.55),
-            fill=RGBColor(0x0f,0x1a,0x30), line=acc, lw=Pt(1.2))
-        T(slide, name, Inches(1.0), ry+Inches(0.08),
-          Inches(2.2), Inches(0.38),
-          size=Pt(13), bold=True, color=acc, align=PP_ALIGN.CENTER)
-        T(slide, desc, Inches(3.35), ry+Inches(0.1),
-          Inches(4.6), Inches(0.38),
-          size=Pt(14), color=TEXT_SUB)
-
-    # 오른쪽: 문제 키워드
-    box(slide, Inches(8.43), y0+Inches(0.15),
-        Inches(4.23), Inches(2.5),
-        fill=RGBColor(0x25,0x10,0x10), line=RED, lw=Pt(2))
-    T(slide, "한계",
-      Inches(8.73), y0+Inches(0.3),
-      Inches(3.63), Inches(0.42),
-      size=Pt(20), bold=True, color=RED)
-    ML(slide, [
-        "Hallucination",
-        "단답  ·  추론 부재",
-        "도메인 맥락 부족",
-    ], Inches(8.73), y0+Inches(0.82),
-       Inches(3.63), Inches(1.5),
-       size=Pt(17), color=TEXT_SUB)
-
-    box(slide, Inches(8.43), y0+Inches(2.8),
-        Inches(4.23), Inches(2.85),
-        fill=RGBColor(0x11,0x1e,0x11), line=GREEN, lw=Pt(2))
-    T(slide, "목표",
-      Inches(8.73), y0+Inches(2.95),
-      Inches(3.63), Inches(0.42),
-      size=Pt(20), bold=True, color=GREEN)
-    ML(slide, [
-        "Faithfulness ↑",
-        "CoT 설명",
-        "Hallucination ↓",
-    ], Inches(8.73), y0+Inches(3.47),
-       Inches(3.63), Inches(1.8),
-       size=Pt(17), color=TEXT_SUB)
-
-
-# ════════════════════════════════════════════════════
-# S7 — 접근 방식 (키워드 위주)
-# ════════════════════════════════════════════════════
-def s7(prs):
-    slide = new_slide(prs)
-    y0 = hdr(slide, "Reasoning Distillation", "Qwen3-14B  →  Qwen3-8B  ·  LoRA r=32")
-
-    # 플로우
     steps = [
-        ("Wikipedia\n한국어",    BLUE,   RGBColor(0x1a,0x1a,0x3a)),
-        ("Teacher\nQwen3-14B",  ORANGE, RGBColor(0x2a,0x18,0x08)),
-        ("CoT QA\n~50,000개",   GREEN,  RGBColor(0x11,0x1e,0x11)),
-        ("Student\nQwen3-8B",   PURPLE, RGBColor(0x1a,0x11,0x2a)),
-        ("GGUF\nOllama",        TEAL,   RGBColor(0x0f,0x1e,0x1e)),
+        ("Wikipedia\n한국어", "지문 소스",    BLUE,   RGBColor(0x1a,0x1a,0x3a)),
+        ("Teacher\nQwen3-14B", "CoT 생성",   ORANGE, RGBColor(0x2a,0x18,0x08)),
+        ("데이터셋\n병합",     "~70,000개",   GREEN,  RGBColor(0x11,0x1e,0x11)),
+        ("Student\nQwen3-8B", "LoRA 학습",   PURPLE, RGBColor(0x1a,0x11,0x2a)),
+        ("GGUF\n변환",        "양자화",       TEAL,   RGBColor(0x0f,0x1e,0x1e)),
+        ("Ollama\n서빙",      "로컬 배포",    YELLOW, RGBColor(0x1e,0x1e,0x08)),
     ]
-    sw = Inches(2.1); sh = Inches(1.4)
+    sw = Inches(1.87); sh = Inches(1.3)
     sx = Inches(0.7)
-    for i, (label, acc, bg_c) in enumerate(steps):
+    for i, (label, sub, acc, bg_c) in enumerate(steps):
         box(slide, sx, y0+Inches(0.18), sw, sh, fill=bg_c, line=acc, lw=Pt(2))
-        T(slide, label, sx, y0+Inches(0.35), sw, sh-Inches(0.1),
-          size=Pt(15), bold=True, color=acc, align=PP_ALIGN.CENTER)
+        T(slide, label, sx, y0+Inches(0.3), sw, Inches(0.65),
+          size=Pt(14), bold=True, color=acc, align=PP_ALIGN.CENTER)
+        T(slide, sub, sx, y0+Inches(0.98), sw, Inches(0.35),
+          size=Pt(11), color=DIM, align=PP_ALIGN.CENTER)
         sx += sw
         if i < len(steps)-1:
-            T(slide, "→", sx, y0+Inches(0.45), Inches(0.27), Inches(0.5),
-              size=Pt(22), color=DIM, align=PP_ALIGN.CENTER)
-            sx += Inches(0.27)
+            T(slide, "→", sx, y0+Inches(0.42), Inches(0.28), Inches(0.45),
+              size=Pt(20), color=DIM, align=PP_ALIGN.CENTER)
+            sx += Inches(0.28)
 
-    # 키워드 블록들
-    y1 = y0+Inches(1.82)
-    kw_blocks = [
-        ("데이터", BLUE,
-         ["Wikipedia  ·  KLUE/MRC  ·  OpenThoughts",
-          "CoT  ·  <think> 태그  ·  ChatML 포맷",
-          "Faithfulness 필터  ·  체크포인트"]),
+    y1 = y0+Inches(1.68)
+    cols = [
+        ("데이터", ORANGE,
+         ["Wikipedia CoT   5,000개",
+          "KorQuAD 1.0    10,000개",
+          "KLUE / MRC     10,000개",
+          "sae4K          10,000개",
+          "OpenThoughts   30,000개",
+          "",
+          ("합계  ~65,000개", True, ORANGE),
+          "",
+          "소요 시간",
+          ("~13시간 (현재 진행 중)", False, DIM),
+         ]),
         ("학습", GREEN,
-         ["LoRA  r=32  ·  fp16  ·  alpha=64",
-          "Sequence Packing  ·  Grad Checkpointing",
-          "Kubeflow  ·  L40S 44GB  ·  Watchdog"]),
-        ("평가", ORANGE,
-         ["ROUGE-L  ≥ 0.35",
-          "BERTScore  ≥ 0.80",
-          "Faithfulness  ≥ 0.70  ·  Hallucination  ≤ 0.10"]),
+         ["Qwen3-8B  LoRA r=32",
+          "fp16  ·  에폭 2",
+          "Kubeflow L40S 48GB",
+          "",
+          "Teacher <think> 추론 과정",
+          "포함 학습",
+          "",
+          "소요 시간",
+          ("~2~3시간", True, GREEN),
+         ]),
+        ("배포", TEAL,
+         ["GGUF 변환  (q4_k_m)",
+          "Ollama 등록",
+          "Tailscale VPN 연결",
+          "AI Tutor 모델명 교체",
+          "",
+          "소요 시간",
+          ("~30분", True, TEAL),
+         ]),
     ]
-    cw = Inches(3.93); ch = Inches(3.75)
+    cw = Inches(3.93); ch = Inches(4.42)
     cx = Inches(0.7)
-    for title, acc, kws in kw_blocks:
+    for title, acc, bullets in cols:
         box(slide, cx, y1, cw, ch, fill=CARD, line=acc, lw=Pt(1.5))
-        T(slide, title,
-          cx+Inches(0.2), y1+Inches(0.15),
+        T(slide, title, cx+Inches(0.2), y1+Inches(0.15),
           cw-Inches(0.4), Inches(0.42),
-          size=Pt(20), bold=True, color=acc)
+          size=Pt(17), bold=True, color=acc)
         box(slide, cx+Inches(0.2), y1+Inches(0.62),
             cw-Inches(0.4), Pt(1), fill=acc)
-        for i, kw in enumerate(kws):
-            T(slide, kw,
-              cx+Inches(0.2), y1+Inches(0.82)+Inches(0.88)*i,
-              cw-Inches(0.4), Inches(0.75),
-              size=Pt(14.5), color=TEXT_SUB)
+        ML(slide, bullets,
+           cx+Inches(0.2), y1+Inches(0.77),
+           cw-Inches(0.4), ch-Inches(0.95),
+           size=Pt(14), color=TEXT_SUB)
         cx += cw + Inches(0.17)
 
 
-# ════════════════════════════════════════════════════
-# S8 — 진행 현황 & 마무리
-# ════════════════════════════════════════════════════
+# ── S6 지금 하고 있는 것 ──────────────────────────────────────────────
+def s6(prs):
+    slide = new_slide(prs)
+    y0 = hdr(slide, "지금 하고 있는 것")
+
+    box(slide, Inches(0.7), y0+Inches(0.2),
+        Inches(12.0), Inches(5.5),
+        fill=CARD, line=BORDER)
+
+    # 진행 상태
+    status = [
+        ("✅", "Wikipedia CoT 데이터 생성 중",
+         "Kubeflow L40S 48GB  ·  목표 5,000개  ·  현재 ~50% 완료",
+         "소요: ~13시간  (진행 중)", GREEN),
+        ("⏳", "데이터셋 병합",
+         "KorQuAD + KLUE/MRC + OpenThoughts + sae4K  →  ~65,000개",
+         "소요: ~30분", ORANGE),
+        ("□",  "Student 모델 학습",
+         "Qwen3-8B  LoRA r=32  ·  fp16  ·  에폭 2",
+         "소요: ~2~3시간", DIM),
+        ("□",  "평가  (LLM-as-a-Judge)",
+         "Teacher가 Student 답변 검증  ·  샘플 200개 기준",
+         "소요: ~3~4시간  (결과 따라 재학습 시 +2~3시간)", DIM),
+        ("□",  "GGUF 변환 + 배포",
+         "llama.cpp 변환  →  Ollama 등록  →  AI Tutor 연결",
+         "소요: ~30분", DIM),
+    ]
+    for i, (icon, title, desc, time_str, acc) in enumerate(status):
+        ry = y0+Inches(0.4)+Inches(1.02)*i
+        T(slide, icon,
+          Inches(0.95), ry+Inches(0.1), Inches(0.5), Inches(0.55),
+          size=Pt(20), color=acc, align=PP_ALIGN.CENTER)
+        T(slide, title,
+          Inches(1.6), ry+Inches(0.05),
+          Inches(8.5), Inches(0.35),
+          size=Pt(16), bold=True, color=acc)
+        T(slide, desc,
+          Inches(1.6), ry+Inches(0.4),
+          Inches(8.5), Inches(0.3),
+          size=Pt(12), color=DIM)
+        T(slide, time_str,
+          Inches(10.2), ry+Inches(0.15),
+          Inches(2.8), Inches(0.35),
+          size=Pt(12), bold=True, color=acc, align=PP_ALIGN.RIGHT)
+
+
+# ── S7 추가 데이터셋 ──────────────────────────────────────────────────
+def s7(prs):
+    slide = new_slide(prs)
+    y0 = hdr(slide, "추가로 고려한 데이터셋", "AwesomeKorean_Data 등에서 찾음")
+
+    datasets = [
+        ("Wikipedia CoT", "직접 생성", ORANGE, RGBColor(0x2a,0x18,0x08), RGBColor(0x5a,0x3a,0x10),
+         ["Teacher가 직접 생성",
+          "도메인 맞춤 CoT 포함",
+          "목표 5,000개",
+          "",
+          "핵심 데이터"]),
+        ("KorQuAD 1.0", "squad_kor_v1", BLUE, RGBColor(0x0f,0x1a,0x30), BORDER,
+         ["한국어 독해 QA",
+          "약 60,000개",
+          "위키피디아 기반",
+          "",
+          "지문 충실도 강화"]),
+        ("KLUE / MRC", "klue/mrc", TEAL, RGBColor(0x0f,0x1e,0x1e), RGBColor(0x2a,0x5c,0x5c),
+         ["한국어 독해 QA",
+          "약 10,000개",
+          "다양한 도메인",
+          "",
+          "한국어 이해력 향상"]),
+        ("sae4K", "naver-news-summarization", GREEN, RGBColor(0x11,0x1e,0x11), RGBColor(0x2a,0x5c,0x2a),
+         ["한국어 뉴스 요약",
+          "약 50,000개",
+          "문서→요약 쌍",
+          "",
+          "요약 능력 학습"]),
+        ("OpenThoughts\n-114k", "open-thoughts", PURPLE, RGBColor(0x1a,0x11,0x2a), RGBColor(0x5a,0x2a,0x8a),
+         ["영어 CoT 추론",
+          "30,000개 사용",
+          "수학·논리 추론",
+          "",
+          "추론 능력 보강"]),
+    ]
+
+    cw = Inches(2.3); ch = Inches(5.3)
+    cx = Inches(0.7)
+    for name, repo, acc, bg_c, bd, bullets in datasets:
+        box(slide, cx, y0+Inches(0.15), cw, ch, fill=bg_c, line=bd, lw=Pt(1.5))
+        T(slide, name,
+          cx+Inches(0.15), y0+Inches(0.28),
+          cw-Inches(0.3), Inches(0.65),
+          size=Pt(15), bold=True, color=acc, align=PP_ALIGN.CENTER)
+        T(slide, repo,
+          cx+Inches(0.15), y0+Inches(0.95),
+          cw-Inches(0.3), Inches(0.28),
+          size=Pt(10), color=DIM, align=PP_ALIGN.CENTER)
+        box(slide, cx+Inches(0.15), y0+Inches(1.28),
+            cw-Inches(0.3), Pt(1), fill=acc)
+        ML(slide, bullets,
+           cx+Inches(0.15), y0+Inches(1.45),
+           cw-Inches(0.3), ch-Inches(1.6),
+           size=Pt(13), color=TEXT_SUB)
+        cx += cw + Inches(0.2)
+
+    by = y0+Inches(0.15)+ch+Inches(0.2)
+    box(slide, Inches(0.7), by, Inches(12.0), Inches(0.55),
+        fill=RGBColor(0x0f,0x1a,0x30), line=BLUE_MID)
+    T(slide, "합계  :  Wikipedia 5k  +  KorQuAD 10k  +  KLUE 10k  +  sae4K 10k  +  OpenThoughts 30k  =  ~65,000개",
+      Inches(0.95), by+Inches(0.1), Inches(11.5), Inches(0.38),
+      size=Pt(14), bold=True, color=BLUE)
+
+
+# ── S8 평가 방법 ──────────────────────────────────────────────────────
 def s8(prs):
+    slide = new_slide(prs)
+    y0 = hdr(slide, "평가를 어떻게 할 것인가", "고민 중")
+
+    # 메인: LLM-as-a-Judge
+    box(slide, Inches(0.7), y0+Inches(0.18),
+        Inches(7.5), Inches(5.5),
+        fill=RGBColor(0x0f,0x1a,0x30), line=BLUE_MID, lw=Pt(2))
+    T(slide, "LLM-as-a-Judge  (메인)",
+      Inches(0.95), y0+Inches(0.35),
+      Inches(7.0), Inches(0.45),
+      size=Pt(20), bold=True, color=BLUE)
+    box(slide, Inches(0.95), y0+Inches(0.85),
+        Inches(7.0), Pt(1), fill=BLUE_MID)
+    ML(slide, [
+        "Teacher(Qwen3-14B)가 채점관이 되어",
+        "Student(Qwen3-8B)의 답변을 직접 평가",
+        "",
+        ("평가 기준", True, BLUE),
+        "  •  지문 근거했는가  (Faithfulness)",
+        "  •  추론 과정이 올바른가  (CoT 품질)",
+        "  •  Teacher 답변과 얼마나 유사한가",
+        "",
+        ("선택 이유", True, BLUE),
+        "  •  도메인에 맞는 평가 가능",
+        "  •  숫자 지표보다 직관적",
+        "  •  DeepSeek, Qwen 계열 평가에서",
+        "     실제로 많이 쓰이는 방식",
+    ], Inches(0.95), y0+Inches(1.02),
+       Inches(7.0), Inches(4.3),
+       size=Pt(15), color=TEXT_SUB)
+
+    # 보조 지표
+    box(slide, Inches(8.43), y0+Inches(0.18),
+        Inches(4.3), Inches(5.5),
+        fill=CARD, line=BORDER)
+    T(slide, "보조 지표",
+      Inches(8.68), y0+Inches(0.35),
+      Inches(3.8), Inches(0.42),
+      size=Pt(18), bold=True, color=DIM)
+    box(slide, Inches(8.68), y0+Inches(0.82),
+        Inches(3.8), Pt(1), fill=BORDER)
+    metrics = [
+        ("ROUGE-L",      "텍스트 겹침 F1",    "≥ 0.35"),
+        ("BERTScore",    "의미적 유사도",      "≥ 0.80"),
+        ("Faithfulness", "지문 충실도",        "≥ 0.70"),
+        ("Hallucination","사실 날조 비율",     "≤ 0.10"),
+    ]
+    for i, (name, desc, target) in enumerate(metrics):
+        ry = y0+Inches(1.05)+Inches(1.08)*i
+        T(slide, name, Inches(8.68), ry,
+          Inches(2.0), Inches(0.38),
+          size=Pt(14), bold=True, color=TEXT)
+        T(slide, desc, Inches(8.68), ry+Inches(0.38),
+          Inches(2.5), Inches(0.3),
+          size=Pt(12), color=DIM)
+        T(slide, target, Inches(10.8), ry+Inches(0.05),
+          Inches(1.7), Inches(0.38),
+          size=Pt(14), bold=True, color=GREEN)
+
+
+# ── S9 마무리 ─────────────────────────────────────────────────────────
+def s9(prs):
     slide = new_slide(prs)
     bg(slide, BG_DARK)
     box(slide, 0, 0, W, Inches(0.18), fill=BLUE_MID)
     box(slide, 0, Inches(7.32), W, Inches(0.18), fill=BLUE_MID)
 
-    T(slide, "현재",
-      Inches(1.4), Inches(0.38),
-      Inches(5), Inches(0.52),
-      size=Pt(26), bold=True, color=BLUE)
+    T(slide, "지금까지",
+      Inches(1.4), Inches(0.45),
+      Inches(10), Inches(0.5),
+      size=Pt(22), bold=True, color=BLUE)
 
-    status = [
-        ("✅", "파이프라인 구성",   "데이터 생성  ·  학습  ·  평가 스크립트", GREEN),
-        ("✅", "데이터셋",         "~50,000개 병합 완료",                     GREEN),
-        ("⏳", "학습 진행 중",     "Kubeflow L40S  ·  결과 대기",             ORANGE),
-        ("□",  "서빙",            "GGUF 변환  →  Ollama  ·  Tailscale",      DIM),
-        ("□",  "DPO 정렬",        "학습 결과 확인 후 진행",                   DIM),
+    points = [
+        ("계기",     "48GB VRAM 서버  +  AI Tutor 할루시네이션 문제",     BLUE),
+        ("선택",     "Knowledge Distillation  +  LoRA 파인튜닝",          ORANGE),
+        ("진행",     "Teacher(14B) → CoT 데이터 생성 중  (현재 ~50%)",    GREEN),
+        ("데이터",   "Wikipedia + KorQuAD + KLUE + sae4K  ~65,000개",     TEAL),
+        ("평가",     "LLM-as-a-Judge  —  Teacher가 Student 검증",         PURPLE),
+        ("목표",     "작은 모델로 로컬에서 큰 모델 수준 내기",             YELLOW),
     ]
-    for i, (icon, title, desc, acc) in enumerate(status):
-        ry = Inches(1.05) + Inches(0.9)*i
-        T(slide, icon,
-          Inches(1.4), ry, Inches(0.5), Inches(0.65),
-          size=Pt(22), color=acc, align=PP_ALIGN.CENTER)
-        T(slide, title,
-          Inches(2.05), ry+Inches(0.05), Inches(2.5), Inches(0.45),
-          size=Pt(17), bold=True, color=acc)
-        T(slide, desc,
-          Inches(4.65), ry+Inches(0.1), Inches(7.5), Inches(0.4),
-          size=Pt(15), color=DIM)
 
-    box(slide, Inches(1.4), Inches(5.7),
-        Inches(10.5), Pt(1), fill=BORDER)
+    for i, (label, desc, acc) in enumerate(points):
+        lx = Inches(1.4) if i < 3 else Inches(7.2)
+        ly = Inches(1.15) + Inches(0.95)*(i % 3)
+        box(slide, lx, ly, Inches(5.5), Inches(0.75),
+            fill=CARD, line=acc, lw=Pt(1.5))
+        T(slide, label,
+          lx+Inches(0.2), ly+Inches(0.1),
+          Inches(1.2), Inches(0.55),
+          size=Pt(15), bold=True, color=acc)
+        T(slide, desc,
+          lx+Inches(1.5), ly+Inches(0.15),
+          Inches(3.8), Inches(0.48),
+          size=Pt(13.5), color=TEXT_SUB)
 
     T(slide, "Q & A",
-      Inches(1.4), Inches(5.95),
-      Inches(10.5), Inches(0.85),
-      size=Pt(48), bold=True, color=BLUE,
+      Inches(1.4), Inches(4.55),
+      Inches(10.5), Inches(0.9),
+      size=Pt(52), bold=True, color=BLUE,
       align=PP_ALIGN.CENTER)
 
 
-# ════════════════════════════════════════════════════
+# ── 실행 ──────────────────────────────────────────────────────────────
 def main():
     prs = Presentation()
     prs.slide_width  = W
     prs.slide_height = H
 
     print("생성 중...")
-    s1(prs); print("  1/8 타이틀")
-    s2(prs); print("  2/8 머신러닝 / LLM")
-    s3(prs); print("  3/8 동작 구조")
-    s4(prs); print("  4/8 활용 방법들")
-    s5(prs); print("  5/8 라이브러리 생태계")
-    s6(prs); print("  6/8 AI Tutor")
-    s7(prs); print("  7/8 Reasoning Distillation")
-    s8(prs); print("  8/8 현재 & Q&A")
+    s1(prs); print("  1/7 타이틀")
+    s2(prs); print("  2/7 파인튜닝이란?")
+    s4(prs); print("  3/7 KD + LoRA 상세")
+    s5(prs); print("  4/7 어떻게 할 건지 + 데이터셋")
+    s6(prs); print("  5/7 지금 하고 있는 것")
+    s8(prs); print("  6/7 평가 방법")
+    s9(prs); print("  7/7 마무리")
 
     prs.save("finetune_seminar_v2.pptx")
     print("\n완료: finetune_seminar_v2.pptx")

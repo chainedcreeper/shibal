@@ -17,3 +17,4 @@
 [2026-06-10] 추가 데이터셋 병합 준비: klue/mrc(한국어 독해QA, 최대10k) + OpenThoughts-114k(CoT 추론트레이스, 최대30k). prepare_datasets.py 생성. train_student_kd.py에 context 없는 샘플(OpenThoughts) 처리 템플릿 추가. 실행: python prepare_datasets.py → merged_dataset.jsonl → train_student_kd.py --dataset merged_dataset.jsonl.
 [2026-06-11] 세미나 자료 제작: finetune_seminar_v2.pptx(8장), seminar_script.md(대본+슬라이드별 예상Q&A). 발표 구성: LLM 개념/구조/방법론/라이브러리 소개(앞5장) + AI Tutor 프로젝트 현황(뒤3장). 슬라이드 방향 여러 번 수정 끝에 "ML 소개+우리 시도 간략히" 구조로 확정. chainedcreeper/shibal 레포에 push.
 [2026-06-11] 학교 작업 내용 동기화. Kubeflow vLLM V1 + Triton gcc 문제로 데이터 생성 990개(article 0~299)에서 중단됨. 해결책: VLLM_USE_V1=0 환경변수로 재시작. 집에서 할 것: SSH→터널→V0엔진으로 재시작→5000개 완료 후 학습→GGUF변환→Ollama등록 순서.
+[2026-06-12] PPT 대폭 리뉴얼: "머신러닝 해보기" 테마로 재구성. 8장→7장, 계기/파인튜닝이란/KD+LoRA/파이프라인+데이터셋/진행현황/평가방법/마무리 구성. 대본 전면 재작성: LoRA 악보 비유, 데이터셋 설명 축약, 가상환경 생성 방법, 에폭/fp16/배치사이즈/할루시네이션 개념 Q&A 추가. 예상 질문 4개 카테고리 30개+로 확장. GPU 서버 6월 17일 대여 종료, 학습 완료 후 GGUF 개인 PC 소유 예정.
