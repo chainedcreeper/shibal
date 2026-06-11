@@ -300,50 +300,60 @@ git push project1 master:main
 
 ---
 
-## KD 파이프라인 현황 (2026-06-11 집 세션 3차)
+## KD 파이프라인 현황 (2026-06-11 최종 상태)
 
 ### Kubeflow 상태
 - **URL**: `https://220.90.190.241/` (testuser/qwer)
 - **Notebook**: `explain123` (GPU L40S 48GB)
 - **가상환경**: `~/train_env` (vLLM, torch, peft, trl 설치 완료)
-- **tmux 없음, sudo 없음** — 터미널 직접 실행 중
+- **tmux 없음, sudo 없음, gcc 없음**
 
-### 현재 실행 중 (오전 11시 40분경 재시작)
+### 현재 상태 (미해결)
 ```
-터미널 직접 실행 상태 (nohup 아님) — 터미널 켜두는 중
-EngineCore pid=11611 — Qwen3-14B 모델 로딩 중 (safetensors 25% at 02:48)
 데이터: kd_dataset.jsonl 990개 (articles 0~299 완료)
-체크포인트: ~/do-eat-finetune/kd_checkpoint.json
-로그: ~/gen_log.txt
+체크포인트: ~/do-eat-finetune/kd_checkpoint.json (done=990, done_idx=[0..299])
+모든 생성 프로세스 종료됨 — 재시작 필요
 ```
 
-Discord 알림 설정됨 (학습 완료/실패 시 자동 전송).
+### 실패 원인 — vLLM V1 + Triton gcc 문제
+vLLM 0.22.1 기본 엔진(V1)이 Triton JIT 컴파일 시도 → gcc 없음 → Engine core init failed.
+sudo 없어서 apt-get 불가, conda gcc는 PATH 미반영.
 
-### 이전 실패 원인 정리
-| 시도 | 원인 |
-|------|------|
-| PID 10414 | 모델 로딩 중 프로세스 사망 (Kubeflow 타임아웃 추정) |
-| PID 10924 | gcc 없음 → Triton JIT 컴파일 실패 → Exit 1 |
-| 현재 | gcc 문제 우회됨, 모델 로딩 진행 중 |
+### 집에서 이어서 할 것 (순서대로)
 
-### 주의사항
-- **터미널 닫으면 프로세스 죽음** — 터미널 그대로 유지
-- **집 PC 절전모드**: AC 기준 비활성화 확인됨 (0x00000000)
-- nohup/tmux 없음 → 다음 세션 때 screen 또는 tmux 설치 고려
+**1. 학교 PC SSH 접속**
+```bash
+ssh 107@100.118.126.123
+```
+
+**2. Kubeflow 터널**
+```bash
+ssh -L 8443:220.90.190.241:443 107@localhost
+```
+브라우저 → `https://localhost:8443` → explain123 터미널
+
+**3. V0 엔진으로 생성 재시작 (핵심 수정)**
+```bash
+cd ~/do-eat-finetune && source ~/train_env/bin/activate
+VLLM_USE_V1=0 python generate_kd_dataset.py --target 5000 2>&1 | tee ~/gen_log.txt
+```
+안 되면 enforce_eager 추가:
+```bash
+sed -i 's/max_model_len=4096,/max_model_len=4096,\n        enforce_eager=True,/' generate_kd_dataset.py
+python generate_kd_dataset.py --target 5000 2>&1 | tee ~/gen_log.txt
+```
+
+**4. 생성 완료 확인 후 학습**
+```bash
+wc -l ~/do-eat-finetune/kd_dataset.jsonl   # 5000개 확인
+python train_student_kd.py --dataset kd_dataset.jsonl --epochs 3 --lora-r 32 2>&1 | tee ~/train_log.txt
+```
 
 ### generate_kd_dataset.py 핵심 설정
 - **교사 모델**: Qwen/Qwen3-14B (vLLM, fp16, gpu_memory_utilization=0.85)
-- **Flash Attention 2**: vLLM이 자동으로 사용
-- **batch_size**: 32 (vLLM 내부 스케줄링)
-- **max_tokens**: 512
-- **CoT**: `/no_think` 제거됨 → `<think>` 추론 흔적 생성
-- **체크포인트**: 배치마다 저장 → 재시작 시 자동 이어서
-
-학습 로그 확인:
-```bash
-tail -20 ~/train_log.txt
-wc -l ~/do-eat-finetune/kd_dataset.jsonl
-```
+- **max_tokens**: 512, **max_model_len**: 4096
+- **CoT**: `<think>` 추론 흔적 생성 (`/no_think` 제거됨)
+- **체크포인트**: 배치마다 저장 → 300번 article부터 자동 이어서
 
 ---
 
