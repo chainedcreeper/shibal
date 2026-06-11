@@ -329,32 +329,67 @@ wc -l ~/do-eat-finetune/kd_dataset.jsonl
 - **CoT**: `/no_think` 제거됨 → `<think>` 추론 흔적 생성
 - **체크포인트**: 배치마다 저장 → 재시작 시 자동 이어서
 
-### 데이터 생성 완료 후 할 것
+### 데이터 생성 완료 후 — 학습 자동 시작 설정 완료
+생성(PID 9400) 완료 시 자동으로 학습 시작 + 디스코드 알림 오도록 설정됨.
+학습 완료 알림: Discord 웹훅 (채널 등록됨)
+
+학습 로그 확인:
+```bash
+tail -20 ~/train_log.txt
+```
+
+---
+
+## 디스코드 알림 오면 — 집에서 할 것 (순서대로)
+
+### 1. 학교 PC SSH 접속
+```bash
+ssh 107@100.118.126.123
+```
+
+### 2. Kubeflow 터널 (학교 PC 터미널에서)
+```bash
+ssh -L 8443:220.90.190.241:443 107@localhost
+```
+집 PC 브라우저 → `https://localhost:8443` → Kubeflow 터미널 열기
+
+### 3. GGUF 변환 (Kubeflow 터미널에서)
 ```bash
 cd ~/do-eat-finetune
 source ~/train_env/bin/activate
-nohup python train_student_kd.py --dataset kd_dataset.jsonl --epochs 3 --lora-r 32 > ~/train_log.txt 2>&1 &
+git clone https://github.com/ggerganov/llama.cpp
+pip install -r llama.cpp/requirements.txt -q
+python llama.cpp/convert_hf_to_gguf.py ./student_kd_model --outtype q4_k_m --outfile ./student_kd_model/model-q4km.gguf
 ```
 
-### 학습 완료 후 할 것
+### 4. 파일 집 PC로 복사
 ```bash
-# GGUF 변환
-git clone https://github.com/ggerganov/llama.cpp
-pip install -r llama.cpp/requirements.txt
-python llama.cpp/convert_hf_to_gguf.py ./student_kd_model --outtype q4_k_m
+# 학교 PC에서 (Kubeflow → 학교 PC)
+scp jovyan@220.90.190.241:/home/jovyan/do-eat-finetune/student_kd_model/model-q4km.gguf ~/
 
-# 집 PC Ollama 등록 (Tailscale로 파일 전송 후)
-ollama create reasoning-tutor -f ./student_kd_model/Modelfile
+# 집 PC에서 (학교 PC → 집 PC)
+scp 107@100.118.126.123:~/model-q4km.gguf C:\Users\107\Desktop\
+```
 
-# pj llm.py 모델명 교체
+### 5. 집 PC Ollama 등록
+```powershell
+echo "FROM C:\Users\107\Desktop\model-q4km.gguf" > C:\Users\107\Desktop\Modelfile
+ollama create reasoning-tutor -f C:\Users\107\Desktop\Modelfile
+```
+
+### 6. pj llm.py 모델명 교체
+```python
 "model": "reasoning-tutor"
 ```
 
-### 환경 정보
+---
+
+## 환경 정보
 - Kubeflow CUDA: 12.4
 - vLLM: 0.22.1
 - bitsandbytes: 미사용 (CUDA 12.4 환경 충돌)
 - Flash Attention 2: vLLM 자동 적용
+- 집 PC VRAM: 8GB (Q4_K_M 약 5~6GB → 여유 있음)
 
 ---
 
