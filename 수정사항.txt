@@ -71,3 +71,55 @@
   - gradio / python-pptx / gtts / click / typer 제거 (안 씀)
   - fastapi / uvicorn / rhwp / edge-tts / python-jose / passlib 추가
   - Ollama 설치 단계 + 서버 실행 명령 명시
+
+===== 2026-06-14 후반 작업 =====
+
+[15] 문서 추출 전면 재설계 — 모든 형식 × 모든 라이브러리 병렬
+  - document/_parallel.py 신설: ThreadPoolExecutor + 가장 텍스트 많은 결과 채택
+  - pdf_loader: fitz + pdfplumber + pypdf 병렬 → 부족 시 Surya + Paddle OCR 폴백
+  - hwp_loader: HWPX는 python-hwpx + zipfile-XML 폴백 / HWP5는 pyhwp + olefile-PrvText
+  - pptx_loader 신설: python-pptx (notes 포함) + zipfile-XML 폴백
+  - rhwp-python 폐기 (conda env libfreetype 2.12 vs wheel 2.13+ 충돌)
+  - index.html: PPTX accept 추가, 정규식 갱신
+  - pip.txt: pdfplumber, pypdf, python-pptx, lxml, olefile 추가
+
+[16] 풀 서버 통합 테스트 + 가드 추가
+  - bcrypt 5.0.0 호환 깨짐 → bcrypt<4.1 다운그레이드 (passlib 1.7.4 와 호환)
+  - 인강 생성 1차 실패: moviepy zero-size array (빈 audio 슬라이드)
+  - tts_engine.py 가드: 빈 narration → title 폴백, ffprobe duration 실측, 최소 1초 패딩
+  - video_compose.py 가드: audio 검증 (size>1KB+duration>0), 자막 청크 end<=start 스킵
+  - ★ 인강 생성 성공: HTTP 200, 3.0 MB, 8분 14초, 1280x720 H.264 High profile
+
+[17] Kubeflow 홈 정리
+  - do-eat-finetune/ 폐기 (KD 학습 폐기 확정)
+  - 임시 로그/체크포인트 일괄 rm
+  - 홈에 5개만: pj/ pj.log ollama/ ollama.log train_env/
+
+[18] run.sh 원클릭 실행 파일
+  - 4단계: ollama serve → 모델 확인 → pj 서버 → 부팅 대기
+  - 환경변수: PJ_PORT, OLLAMA_MODEL, OLLAMA_BIN
+  - chmod +x 적용 (git update-index --chmod=+x)
+
+[19] 모듈화 — auth/student/llm/rag 패키지로 캡슐화
+  - 평탄 .py 12개 → 4개 도메인 패키지
+  - auth/__init__.py, student/{db,level}.py, llm/{ollama,personal,remote}.py
+  - rag/{core,embedding,vector,reranker,chunker,qa}.py
+  - app.py import 경로 일괄 갱신
+  - 모듈화 후 RAG + 채팅 전체 흐름 정상 동작 확인
+
+[20] 사용자별 RAG 인덱스 + 디스크 영속화 (약점 #1+#2 해결)
+  - rag/state.py 신설: 메모리 dict + 디스크 (rag_indexes/<sid>/) 동시 저장, RLock
+  - rag/core.py 전역 변수 제거, 모든 함수 student_id 인자
+  - auth.get_user_from_query: EventSource 쿼리 토큰 디코드
+  - app.py 전체 엔드포인트 JWT 인증 + student_id 전달
+  - pdf_ready 글로벌 → has_state(sid) 함수
+  - 인강 mp4 학생별 분리 (lecture_<sid>.mp4 — race condition 방지)
+  - /document-status 신규 엔드포인트 (학생의 현재 활성 문서)
+  - /export-student 본인 데이터만 (403 가드)
+  - index.html: EventSource ?token= 쿼리, /generate-video Authorization 헤더
+  - ★ 검증: 서버 재시작 후에도 인덱스 살아남음 (PID 22498→22695, document-status 동일)
+
+[ 남은 약점 (다음 세션) ]
+  #3 인강 생성 진행 표시 (SSE 또는 작업 큐)
+  #4 실제 한국 대학 HWP/PPTX 자료로 병렬 추출 검증
+  #5 외부 접근 (Kubeflow proxy / Tailscale / SSH 터널)
