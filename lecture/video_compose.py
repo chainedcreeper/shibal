@@ -26,12 +26,23 @@ SUBTITLE_Y_REL   = 0.84  # 화면 높이의 84% 위치
 
 
 def _slide_clip(slide: dict, font_path: str) -> CompositeVideoClip:
-    duration = slide["duration"]
+    duration = max(float(slide.get("duration", 0.0)), 1.0)
     bg = ImageClip(slide["png_path"]).with_duration(duration)
-    bg = bg.with_audio(AudioFileClip(slide["audio_path"]))
+
+    # 오디오 첨부 (실패해도 영상은 살림)
+    audio_path = slide.get("audio_path")
+    if audio_path and os.path.exists(audio_path) and os.path.getsize(audio_path) > 1024:
+        try:
+            audio = AudioFileClip(audio_path)
+            if audio.duration and audio.duration > 0:
+                bg = bg.with_audio(audio)
+        except Exception:
+            pass
 
     overlays: list = []
     for chunk in _chunk_words(slide.get("word_times", [])):
+        if chunk["end"] <= chunk["start"]:
+            continue
         txt = TextClip(
             text=chunk["text"],
             font=font_path,
