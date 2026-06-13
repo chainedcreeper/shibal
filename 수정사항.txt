@@ -27,3 +27,47 @@
   fetch 후 json() → ReadableStream으로 토큰 단위 수신
   addStreamBubble(), appendToStreamBubble() 함수 추가
   결과: 답변이 생성되는 즉시 화면에 출력됨
+
+===== 2026-06-14 작업 =====
+
+[9] document/ 디렉토리 신설 (HWP/HWPX 지원)
+  - document/__init__.py: extract_text(path) 통합 인터페이스 (확장자로 분기)
+  - document/pdf_loader.py: 기존 pdf_loader.py 이동 (내용 동일)
+  - document/hwp_loader.py: 신설 — rhwp-python 사용 (HWP5 + HWPX 동일 API)
+  - 기존 pdf_loader.py 삭제
+
+[10] rag.py
+  - process_pdf → process_document (확장자 무관)
+  - import 경로 변경: pdf_loader → document
+  - 에러 메시지 일반화: "PDF" → "문서"
+  - 이전 이름 호환: process_pdf = process_document
+
+[11] app.py
+  - /upload 엔드포인트: 확장자 검증 + tempfile suffix 유지 (.pdf, .hwp, .hwpx)
+  - VIDEO_PROMPT / strip_thinking / re import 제거 (인강 파이프라인 분리)
+  - /generate-video: 새 lecture.generate_lecture() 호출, JWT 인증 + 학생 수준 적용
+  - "PDF 업로드 필요" → "문서 업로드 필요"
+
+[12] lecture/ 디렉토리 신설 (인강 자동 생성)
+  - lecture/script_gen.py: qwen3:8b가 슬라이드 스크립트 JSON 생성
+                          (title/bullets/narration 필드)
+  - lecture/tts_engine.py: Edge-TTS (ko-KR-SunHiNeural) — gTTS 대체
+                          단어 단위 타임스탬프 수집
+  - lecture/slide_render.py: PIL로 1280x720 슬라이드 PNG
+                            한글 폰트 자동 탐색 (시스템 → ~/.cache/pj/fonts 다운로드)
+  - lecture/subtitle.py: 5단어 청크 자막 + SRT 생성
+  - lecture/video_compose.py: moviepy로 슬라이드+음성+자막 burn-in mp4
+  - lecture/pipeline.py: generate_lecture(context, level_info, out_path) 한 줄
+  - 기존 tts.py, video.py 삭제
+
+[13] index.html
+  - "PDF 드래그 · 클릭" → "PDF · HWP · HWPX 드래그 · 클릭"
+  - input accept=".pdf" → ".pdf,.hwp,.hwpx"
+  - 드롭존 파일명 체크 정규식: /\.(pdf|hwp|hwpx)$/i
+  - "PDF를 업로드하고..." → "문서를 업로드하고..."
+  - "PDF 질의응답" → "강의 자료 질의응답"
+
+[14] pip.txt 정리
+  - gradio / python-pptx / gtts / click / typer 제거 (안 씀)
+  - fastapi / uvicorn / rhwp / edge-tts / python-jose / passlib 추가
+  - Ollama 설치 단계 + 서버 실행 명령 명시

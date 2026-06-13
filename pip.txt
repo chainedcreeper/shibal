@@ -1,5 +1,17 @@
-1.vs코드 실행하고 터미널 실행
-2.python -m venv venv
-3.venv\Scriptsctivate
-4.pip install gradio requests pymupdf sentence-transformers faiss-cpu numpy langchain langchain-text-splitters python-pptx gtts moviepy pillow click==8.1.7 typer==0.12.3 surya-ocr
-복사해서 터미널 입력(라이브러리 모두 설치)
+===== 설치 가이드 =====
+
+1. 가상환경
+   python -m venv venv
+   venv\Scripts\activate          (Windows)
+   source venv/bin/activate       (Linux/Mac)
+
+2. 의존성 설치 (한 줄)
+pip install fastapi "uvicorn[standard]" requests pymupdf sentence-transformers faiss-cpu numpy langchain langchain-text-splitters moviepy pillow rhwp surya-ocr paddleocr paddlepaddle==3.1.1 edge-tts "python-jose[cryptography]" "passlib[bcrypt]" python-multipart
+
+3. Ollama (별도)
+   - https://ollama.com/download 설치 후
+   - ollama pull qwen3:8b
+
+4. 서버 실행
+   python app.py
+   → http://localhost:7860

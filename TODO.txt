@@ -19,6 +19,25 @@
   - 학생별 50개 이상 대화 쌓이면 학습 트리거
   - EXAONE-3.5-2.4B 기반 QLoRA SFT
 
-[5] TTS 품질 개선 (gTTS → 더 자연스러운 TTS)
-  - 현재: tts.py gTTS 사용
-  - 개선 후보: Coqui TTS, Edge TTS
+[5] TTS 품질 개선 (gTTS → 더 자연스러운 TTS) ✅ 완료 (2026-06-14)
+  - Edge-TTS (ko-KR-SunHiNeural) 적용
+  - 단어 단위 타임스탬프 수집 → 자막 burn-in
+  - 위치: lecture/tts_engine.py
+
+[6] 인강 자동 생성 파이프라인 ✅ 완료 (2026-06-14)
+  - lecture/ 모듈: script_gen + tts_engine + slide_render + subtitle + video_compose
+  - 엔드포인트: /generate-video (JWT + 학생 수준 적용)
+  - generate_lecture(context, level_info, out_path) 한 줄로 끝
+
+[7] HWP/HWPX 지원 ✅ 완료 (2026-06-14)
+  - rhwp-python (HWP5 + HWPX 동일 API)
+  - document/ 모듈로 PDF + HWP 통합
+
+[8] ffmpeg 시스템 설치 필요
+  - moviepy가 ffmpeg 호출
+  - Kubeflow: conda install -c conda-forge ffmpeg
+  - Windows: choco install ffmpeg 또는 https://ffmpeg.org/download.html
+
+[9] 한글 폰트 (영상 슬라이드용)
+  - slide_render.py가 자동 탐색 + 다운로드
+  - 후보: NanumGothic, NotoSansCJK, AppleSDGothicNeo, malgun

@@ -20,11 +20,11 @@ import tempfile
 import os
 import asyncio
 import json
-import re
 from concurrent.futures import ThreadPoolExecutor
 
 import rag as rag_module
-from rag import process_pdf, ask, ask_stream, ask_full, ask_full_stream
+from rag import process_document, ask_stream, ask_full_stream
+from document import SUPPORTED_EXTS
 from qa_generator import generate_qa_pairs, save_qa_pairs
 from student_db import init_db, log_interaction, should_train, export_student_data, get_student
 from model_manager import personal_model_exists, ask_personal_stream
@@ -35,18 +35,13 @@ from level_assessor import init_level_db, assess_and_update, get_student_level
 init_db()
 init_auth_db()
 init_level_db()
-from tts import create_tts
-from video import create_video
+from lecture import generate_lecture
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI()
 executor = ThreadPoolExecutor(max_workers=2)
 pdf_ready = False
-
-
-def strip_thinking(text: str) -> str:
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
 class RegisterRequest(BaseModel):
@@ -79,18 +74,26 @@ async def root():
 
 
 @app.post("/upload")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_document(file: UploadFile = File(...)):
     global pdf_ready
     pdf_ready = False
 
+    filename = file.filename or "uploaded"
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in SUPPORTED_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"지원하지 않는 형식: {ext or '없음'} (지원: {', '.join(SUPPORTED_EXTS)})",
+        )
+
     content = await file.read()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
 
     loop = asyncio.get_running_loop()
     try:
-        await loop.run_in_executor(executor, process_pdf, tmp_path)
+        await loop.run_in_executor(executor, process_document, tmp_path)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -185,7 +188,7 @@ async def _stream():
 @app.get("/analyze")
 async def analyze():
     if not pdf_ready:
-        raise HTTPException(status_code=400, detail="PDF 업로드 필요")
+        raise HTTPException(status_code=400, detail="문서 업로드 필요")
     return StreamingResponse(
         _stream(),
         media_type="text/event-stream",
@@ -196,7 +199,7 @@ async def analyze():
 @app.post("/chat")
 async def chat(msg: ChatMessage, user=Depends(get_current_user)):
     if not pdf_ready:
-        raise HTTPException(status_code=400, detail="PDF 업로드 필요")
+        raise HTTPException(status_code=400, detail="문서 업로드 필요")
 
     student_id = user["student_id"]
 
@@ -287,31 +290,19 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
     )
 
 
-VIDEO_PROMPT = """너는 업로드된 강의자료 전담 AI 튜터다.
-반드시 아래 형식을 지켜:
-
-## 슬라이드 제목
-- 핵심 내용
-- 핵심 내용
-- 핵심 내용
-
-규칙:
-- 모든 슬라이드는 반드시 ## 로 시작
-- 최소 5개 이상의 슬라이드 생성
-- 각 슬라이드 내용은 3~5개의 핵심 항목
-- 긴 문단 금지
-- 발표용 슬라이드 형식"""
-
-
 @app.post("/generate-video")
-async def generate_video():
+async def generate_video(user=Depends(get_current_user)):
     if not pdf_ready:
-        raise HTTPException(status_code=400, detail="PDF 업로드 필요")
+        raise HTTPException(status_code=400, detail="문서 업로드 필요")
     loop = asyncio.get_running_loop()
-    summary = await loop.run_in_executor(executor, ask_full, VIDEO_PROMPT)
-    summary = strip_thinking(summary)
-    await loop.run_in_executor(executor, create_tts, summary)
-    video_path = await loop.run_in_executor(executor, create_video, summary)
+
+    level_info = get_student_level(user["student_id"])
+    context = await loop.run_in_executor(executor, rag_module._full_context)
+
+    out_path = os.path.join(BASE_DIR, "lecture_video.mp4")
+    video_path = await loop.run_in_executor(
+        executor, generate_lecture, context, level_info, out_path
+    )
     return FileResponse(video_path, media_type="video/mp4", filename="lecture_video.mp4")
 
 @app.get("/my-level")
@@ -334,7 +325,7 @@ async def export_student(student_id: str, user=Depends(get_current_user)):
 @app.get("/generate-qa")
 async def generate_qa():
     if not pdf_ready:
-        raise HTTPException(status_code=400, detail="PDF 업로드 필요")
+        raise HTTPException(status_code=400, detail="문서 업로드 필요")
 
     async def sse_gen():
         import queue as q_mod

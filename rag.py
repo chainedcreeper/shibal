@@ -2,7 +2,7 @@ import re
 import numpy as np
 import requests
 
-from pdf_loader import extract_text
+from document import extract_text
 from text_chunker import split_text
 from embedding import create_embeddings, model
 from vector import build_index
@@ -14,21 +14,25 @@ children = []
 child_index = None
 
 
-def process_pdf(pdf_path):
+def process_document(doc_path):
     global parents, children, child_index
-    pages = extract_text(pdf_path)
+    pages = extract_text(doc_path)
     if not pages:
-        raise ValueError("PDF에서 텍스트를 추출할 수 없습니다. 이미지 전용 PDF이거나 손상된 파일일 수 있습니다.")
+        raise ValueError("문서에서 텍스트를 추출할 수 없습니다. 이미지 전용이거나 손상된 파일일 수 있습니다.")
     parents, children = split_text(pages)
     if not children:
-        raise ValueError("PDF 내용이 너무 짧아 처리할 수 없습니다.")
+        raise ValueError("문서 내용이 너무 짧아 처리할 수 없습니다.")
     embeddings = create_embeddings([c["text"] for c in children])
     child_index = build_index(embeddings)
 
 
+# 이전 이름 호환
+process_pdf = process_document
+
+
 def _get_context(question, initial_k=20, final_k=3):
     if child_index is None or not children:
-        raise RuntimeError("PDF가 업로드되지 않았습니다.")
+        raise RuntimeError("문서가 업로드되지 않았습니다.")
 
     k = min(initial_k, len(children))
     q_emb = model.encode([question], normalize_embeddings=True)
@@ -59,7 +63,7 @@ def ask_stream(question, level_info=None):
 
 def _full_context(max_chars=6000):
     if not parents:
-        raise RuntimeError("PDF가 업로드되지 않았습니다.")
+        raise RuntimeError("문서가 업로드되지 않았습니다.")
     return "\n\n".join(f"[p.{p['page']}] {p['text']}" for p in parents)[:max_chars]
 
 def ask_full(question, max_tokens=6000):

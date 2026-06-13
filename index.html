@@ -95,10 +95,10 @@
          class="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-all"
          onclick="document.getElementById('fileInput').click()">
       <div class="text-2xl mb-1">📄</div>
-      <p class="text-xs font-medium text-slate-500">PDF 드래그 · 클릭</p>
+      <p class="text-xs font-medium text-slate-500">PDF · HWP · HWPX 드래그 · 클릭</p>
       <p class="text-[10px] text-slate-400 mt-0.5">강의 슬라이드 · 교재</p>
     </div>
-    <input id="fileInput" type="file" accept=".pdf" class="hidden">
+    <input id="fileInput" type="file" accept=".pdf,.hwp,.hwpx" class="hidden">
 
     <!-- Upload state -->
     <div id="uploadState" class="hidden px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-1.5">
@@ -162,7 +162,7 @@
       <div id="tab-summary" class="tab-panel absolute inset-0 overflow-y-auto p-5">
         <div id="ph-summary" class="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
           <span class="text-4xl">📄</span>
-          <p class="text-xs">PDF를 업로드하고 분석을 시작하세요</p>
+          <p class="text-xs">문서를 업로드하고 분석을 시작하세요</p>
         </div>
         <div id="ld-summary" class="hidden flex items-center gap-2 text-slate-400 text-xs">
           <div class="spinner" style="width:16px;height:16px"></div> 요약 생성 중...
@@ -179,7 +179,7 @@
       <div id="tab-concepts" class="tab-panel absolute inset-0 overflow-y-auto p-5 hidden">
         <div id="ph-concepts" class="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
           <span class="text-4xl">🧠</span>
-          <p class="text-xs">PDF를 업로드하고 분석을 시작하세요</p>
+          <p class="text-xs">문서를 업로드하고 분석을 시작하세요</p>
         </div>
         <div id="ld-concepts" class="hidden flex items-center gap-2 text-slate-400 text-xs">
           <div class="spinner" style="width:16px;height:16px"></div> 핵심 개념 추출 중...
@@ -196,7 +196,7 @@
       <div id="tab-exam" class="tab-panel absolute inset-0 overflow-y-auto p-5 hidden">
         <div id="ph-exam" class="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
           <span class="text-4xl">📝</span>
-          <p class="text-xs">PDF를 업로드하고 분석을 시작하세요</p>
+          <p class="text-xs">문서를 업로드하고 분석을 시작하세요</p>
         </div>
         <div id="ld-exam" class="hidden flex items-center gap-2 text-slate-400 text-xs">
           <div class="spinner" style="width:16px;height:16px"></div> 예상 문제 생성 중...
@@ -234,7 +234,7 @@
     <!-- Chat header -->
     <div class="px-4 py-3 border-b border-slate-200 shrink-0 flex items-center gap-2">
       <span class="text-sm">💬</span>
-      <p class="text-xs font-semibold text-slate-700">PDF 질의응답</p>
+      <p class="text-xs font-semibold text-slate-700">강의 자료 질의응답</p>
       <span id="levelBadge" class="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 hidden"></span>
       <span class="w-2 h-2 rounded-full bg-slate-300" id="chatDot"></span>
     </div>
@@ -243,7 +243,7 @@
     <div id="chatLog" class="flex-1 overflow-y-auto p-3 space-y-2.5">
       <div class="flex justify-start">
         <div class="bg-slate-100 text-slate-600 rounded-2xl rounded-tl-sm px-3 py-2 text-xs max-w-[90%]">
-          PDF를 업로드하면 강의자료에 대해 무엇이든 질문할 수 있어요 📚
+          문서를 업로드하면 강의자료에 대해 무엇이든 질문할 수 있어요 📚
         </div>
       </div>
     </div>
@@ -347,7 +347,7 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drop-hov
 dropZone.addEventListener('drop', e => {
   e.preventDefault(); dropZone.classList.remove('drop-hover');
   const f = e.dataTransfer.files[0];
-  if (f?.name.endsWith('.pdf')) upload(f);
+  if (f && /\.(pdf|hwp|hwpx)$/i.test(f.name)) upload(f);
 });
 
 async function upload(file) {
