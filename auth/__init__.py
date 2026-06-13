@@ -3,7 +3,7 @@ import os
 import sqlite3
 from datetime import datetime, timedelta
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -74,7 +74,7 @@ def create_token(student_id: str, name: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def _decode_token(token: str) -> dict:
     try:
         payload    = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         student_id = payload.get("sub")
@@ -90,8 +90,18 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         )
 
 
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    """Authorization 헤더용 (fetch)."""
+    return _decode_token(token)
+
+
+def get_user_from_query(token: str = Query(..., alias="token")):
+    """쿼리 파라미터 token 용 (EventSource — 브라우저가 헤더 못 보냄)."""
+    return _decode_token(token)
+
+
 __all__ = [
     "init_auth_db", "register_user", "authenticate_user",
-    "create_token", "get_current_user",
+    "create_token", "get_current_user", "get_user_from_query",
     "pwd_ctx", "oauth2_scheme",
 ]

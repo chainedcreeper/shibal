@@ -9,53 +9,62 @@ if _os.path.exists(_env_path):
                 _os.environ.setdefault(_k.strip(), _v.strip())
 _os.environ.setdefault("SURYA_DEVICE", "cpu")
 
-import queue
-
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
-from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
-import uvicorn
-import tempfile
-import os
 import asyncio
 import json
+import os
+import queue
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
-from rag      import core as rag_module
-from rag      import process_document, ask_stream, ask_full_stream, generate_qa_pairs, save_qa_pairs
+import uvicorn
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse, Response
+from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
+
+from rag import (
+    process_document, ask_stream, ask_full_stream,
+    generate_qa_pairs, save_qa_pairs,
+    get_parents, has_state, get_meta,
+)
+from rag.core import _get_context, _full_context
 from document import SUPPORTED_EXTS
-from student  import (
+from student import (
     init_db, log_interaction, should_train, export_student_data, get_student,
     init_level_db, assess_and_update, get_student_level,
 )
-from llm      import (
+from llm import (
     personal_model_exists, ask_personal_stream,
     ask_server_stream, is_server_available,
 )
-from auth     import init_auth_db, register_user, authenticate_user, create_token, get_current_user
+from auth import (
+    init_auth_db, register_user, authenticate_user, create_token,
+    get_current_user, get_user_from_query,
+)
+from lecture import generate_lecture
 
 init_db()
 init_auth_db()
 init_level_db()
-from lecture import generate_lecture
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app      = FastAPI()
+executor = ThreadPoolExecutor(max_workers=4)
 
-app = FastAPI()
-executor = ThreadPoolExecutor(max_workers=2)
-pdf_ready = False
 
+# ── 모델 ────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):
     student_id: str
-    name: str
-    password: str
+    name:       str
+    password:   str
 
 
 class ChatMessage(BaseModel):
     message: str
 
+
+# ── 인증 ────────────────────────────────────────────
 
 @app.post("/register")
 async def register(req: RegisterRequest):
@@ -65,10 +74,12 @@ async def register(req: RegisterRequest):
 
 @app.post("/login")
 async def login(form: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(form.username, form.password)
+    user  = authenticate_user(form.username, form.password)
     token = create_token(user["student_id"], user["name"])
     return {"access_token": token, "token_type": "bearer", "name": user["name"]}
 
+
+# ── 화면 ────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -76,13 +87,25 @@ async def root():
         return f.read()
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    path = os.path.join(BASE_DIR, "favicon.ico")
+    if os.path.exists(path):
+        return FileResponse(path)
+    return Response(status_code=204)
+
+
+# ── 문서 업로드 (사용자별 인덱스) ───────────────────
+
 @app.post("/upload")
-async def upload_document(file: UploadFile = File(...)):
-    global pdf_ready
-    pdf_ready = False
+async def upload_document(
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
+    student_id = user["student_id"]
 
     filename = file.filename or "uploaded"
-    ext = os.path.splitext(filename)[1].lower()
+    ext      = os.path.splitext(filename)[1].lower()
     if ext not in SUPPORTED_EXTS:
         raise HTTPException(
             status_code=400,
@@ -96,7 +119,9 @@ async def upload_document(file: UploadFile = File(...)):
 
     loop = asyncio.get_running_loop()
     try:
-        await loop.run_in_executor(executor, process_document, tmp_path)
+        info = await loop.run_in_executor(
+            executor, lambda: process_document(tmp_path, student_id, filename=filename)
+        )
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -107,9 +132,18 @@ async def upload_document(file: UploadFile = File(...)):
         except Exception:
             pass
 
-    pdf_ready = True
-    return {"status": "ok"}
+    return {"status": "ok", "filename": filename, **info}
 
+
+@app.get("/document-status")
+async def document_status(user=Depends(get_current_user)):
+    sid = user["student_id"]
+    if not has_state(sid):
+        return {"ready": False}
+    return {"ready": True, **get_meta(sid)}
+
+
+# ── 분석 (요약/개념/시험) ──────────────────────────
 
 PROMPTS = [
     ("summary", """업로드된 강의자료 전체를 분석해서 아래 형식으로 요약해줘.
@@ -159,7 +193,7 @@ PROMPTS = [
 ]
 
 
-async def _stream():
+async def _analyze_stream(student_id: str):
     loop = asyncio.get_running_loop()
     for type_key, prompt in PROMPTS:
         yield f"data: {json.dumps({'type': type_key, 'event': 'start'}, ensure_ascii=False)}\n\n"
@@ -167,7 +201,7 @@ async def _stream():
 
         def produce(p=prompt):
             try:
-                for token in ask_full_stream(p):
+                for token in ask_full_stream(p, student_id):
                     token_queue.put(token)
             except Exception as e:
                 token_queue.put(('__error__', str(e)))
@@ -189,30 +223,32 @@ async def _stream():
 
 
 @app.get("/analyze")
-async def analyze():
-    if not pdf_ready:
+async def analyze(user=Depends(get_user_from_query)):
+    sid = user["student_id"]
+    if not has_state(sid):
         raise HTTPException(status_code=400, detail="문서 업로드 필요")
     return StreamingResponse(
-        _stream(),
+        _analyze_stream(sid),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
+# ── 채팅 (수준별 + 라우팅) ─────────────────────────
+
 @app.post("/chat")
 async def chat(msg: ChatMessage, user=Depends(get_current_user)):
-    if not pdf_ready:
-        raise HTTPException(status_code=400, detail="문서 업로드 필요")
-
     student_id = user["student_id"]
+    if not has_state(student_id):
+        raise HTTPException(status_code=400, detail="문서 업로드 필요")
 
     async def sse_gen():
         import queue as q_mod
         token_queue = q_mod.Queue()
 
         def produce():
-            buf = ""
-            in_think = False
+            buf       = ""
+            in_think  = False
             collected = []
             import threading
             threading.Thread(
@@ -222,17 +258,15 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
                 level_info = get_student_level(student_id)
 
                 if personal_model_exists(student_id):
-                    from rag import _get_context
-                    ctx = _get_context(msg.message)
+                    ctx    = _get_context(msg.message, student_id)
                     stream = ask_personal_stream(student_id, ctx, msg.message)
                     source = "personal"
                 elif is_server_available():
-                    from rag import _get_context
-                    ctx = _get_context(msg.message)
+                    ctx    = _get_context(msg.message, student_id)
                     stream = ask_server_stream(ctx, msg.message)
                     source = "server"
                 else:
-                    stream = ask_stream(msg.message, level_info)
+                    stream = ask_stream(msg.message, student_id, level_info)
                     source = "local"
 
                 for token in stream:
@@ -241,7 +275,7 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
                         if in_think:
                             end = buf.find("</think>")
                             if end != -1:
-                                buf = buf[end + 8:]
+                                buf      = buf[end + 8:]
                                 in_think = False
                             else:
                                 buf = ""
@@ -252,7 +286,7 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
                                 if buf[:start]:
                                     token_queue.put(buf[:start])
                                     collected.append(buf[:start])
-                                buf = buf[start + 7:]
+                                buf      = buf[start + 7:]
                                 in_think = True
                             else:
                                 safe = max(0, len(buf) - 7)
@@ -293,51 +327,41 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
     )
 
 
+# ── 인강 영상 ──────────────────────────────────────
+
 @app.post("/generate-video")
 async def generate_video(user=Depends(get_current_user)):
-    if not pdf_ready:
+    sid = user["student_id"]
+    if not has_state(sid):
         raise HTTPException(status_code=400, detail="문서 업로드 필요")
-    loop = asyncio.get_running_loop()
 
-    level_info = get_student_level(user["student_id"])
-    context = await loop.run_in_executor(executor, rag_module._full_context)
+    loop       = asyncio.get_running_loop()
+    level_info = get_student_level(sid)
+    context    = await loop.run_in_executor(executor, lambda: _full_context(sid))
 
-    out_path = os.path.join(BASE_DIR, "lecture_video.mp4")
+    out_path = os.path.join(BASE_DIR, f"lecture_{sid}.mp4")
     video_path = await loop.run_in_executor(
         executor, generate_lecture, context, level_info, out_path
     )
     return FileResponse(video_path, media_type="video/mp4", filename="lecture_video.mp4")
 
-@app.get("/my-level")
-async def my_level(user=Depends(get_current_user)):
-    return get_student_level(user["student_id"])
 
-
-@app.get("/export-student/{student_id}")
-async def export_student(student_id: str, user=Depends(get_current_user)):
-    path = export_student_data(student_id, f"qa_{student_id}.jsonl")
-    info = get_student(student_id)
-    return {
-        "student_id": student_id,
-        "interactions": info["interaction_count"],
-        "model_trained": info["model_trained"],
-        "exported_to": path,
-    }
-
+# ── QA 데이터셋 생성 ───────────────────────────────
 
 @app.get("/generate-qa")
-async def generate_qa():
-    if not pdf_ready:
+async def generate_qa(user=Depends(get_user_from_query)):
+    sid = user["student_id"]
+    if not has_state(sid):
         raise HTTPException(status_code=400, detail="문서 업로드 필요")
 
     async def sse_gen():
         import queue as q_mod
         progress_queue = q_mod.Queue()
-        all_pairs = []
+        all_pairs      = []
 
         def produce():
             try:
-                for current, total, new_pairs in generate_qa_pairs(rag_module.parents):
+                for current, total, new_pairs in generate_qa_pairs(get_parents(sid)):
                     all_pairs.extend(new_pairs)
                     progress_queue.put((current, total, False))
             finally:
@@ -349,7 +373,7 @@ async def generate_qa():
         while True:
             current, total, done = await loop.run_in_executor(None, progress_queue.get)
             if done:
-                path = save_qa_pairs(all_pairs)
+                path = save_qa_pairs(all_pairs, output_path=f"qa_{sid}.jsonl")
                 yield f"data: {json.dumps({'done': True, 'total': len(all_pairs), 'path': path}, ensure_ascii=False)}\n\n"
                 break
             yield f"data: {json.dumps({'current': current, 'total': total}, ensure_ascii=False)}\n\n"
@@ -361,13 +385,27 @@ async def generate_qa():
     )
 
 
-@app.get("/favicon.ico")
-async def favicon():
-    path = os.path.join(BASE_DIR, "favicon.ico")
-    if os.path.exists(path):
-        return FileResponse(path)
-    from fastapi.responses import Response
-    return Response(status_code=204)
+# ── 학생 정보 ──────────────────────────────────────
+
+@app.get("/my-level")
+async def my_level(user=Depends(get_current_user)):
+    return get_student_level(user["student_id"])
+
+
+@app.get("/export-student/{student_id}")
+async def export_student(student_id: str, user=Depends(get_current_user)):
+    # 본인 데이터만 export 가능
+    if user["student_id"] != student_id:
+        raise HTTPException(status_code=403, detail="본인 데이터만 export 가능합니다.")
+    path = export_student_data(student_id, f"qa_{student_id}.jsonl")
+    info = get_student(student_id)
+    return {
+        "student_id":    student_id,
+        "interactions":  info["interaction_count"],
+        "model_trained": info["model_trained"],
+        "exported_to":   path,
+    }
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=7860)

@@ -389,7 +389,7 @@ function startAnalysis() {
   ORDER.forEach(k => { hide('ph-'+k); hide('ct-'+k); show('ld-'+k); setText('tx-'+k, ''); });
   setStep('summary', 'active');
 
-  const es = new EventSource('/analyze');
+  const es = new EventSource('/analyze?token=' + encodeURIComponent(authToken || ''));
   es.onmessage = e => {
     const d = JSON.parse(e.data);
     if (d.type === 'done')  { es.close(); setBtn('analyzeBtn', true); return; }
@@ -432,7 +432,7 @@ async function generateVideo() {
   switchTab('video', document.querySelectorAll('.tab-btn')[3]);
   hide('ph-video'); hide('ct-video'); show('ld-video');
   try {
-    const r = await fetch('/generate-video', { method: 'POST' });
+    const r = await fetch('/generate-video', { method: 'POST', headers: authHeader() });
     if (!r.ok) throw new Error();
     const blob = await r.blob();
     hide('ld-video'); show('ct-video');
@@ -450,7 +450,7 @@ async function generateQA() {
   document.getElementById('qaProgressText').textContent = '시작 중...';
   document.getElementById('qaProgressBar').style.width = '0%';
 
-  const es = new EventSource('/generate-qa');
+  const es = new EventSource('/generate-qa?token=' + encodeURIComponent(authToken || ''));
   es.onmessage = e => {
     const d = JSON.parse(e.data);
     if (d.done) {
