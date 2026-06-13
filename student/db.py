@@ -1,9 +1,10 @@
+"""학생 상호작용 DB + 학습 트리거 조건."""
 import json
 import sqlite3
 
-DB_PATH = "students.db"
-TRAIN_THRESHOLD = 50
-RETRAIN_INTERVAL = 20
+DB_PATH           = "students.db"
+TRAIN_THRESHOLD   = 50
+RETRAIN_INTERVAL  = 20
 
 
 def init_db():
@@ -60,10 +61,10 @@ def should_train(student_id):
     count = s["interaction_count"]
     if not s["model_trained"]:
         return count >= TRAIN_THRESHOLD
-    # 재학습: 마지막 학습 이후 RETRAIN_INTERVAL 이상 쌓였는지
     conn = sqlite3.connect(DB_PATH)
     new_count = conn.execute(
-        "SELECT COUNT(*) FROM interactions WHERE student_id=? AND created_at > (SELECT last_trained_at FROM students WHERE student_id=?)",
+        "SELECT COUNT(*) FROM interactions WHERE student_id=? "
+        "AND created_at > (SELECT last_trained_at FROM students WHERE student_id=?)",
         (student_id, student_id),
     ).fetchone()[0]
     conn.close()

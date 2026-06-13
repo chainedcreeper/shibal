@@ -1,11 +1,13 @@
+"""강의 자료 → QA 페어 자동 생성 (개인화 학습 데이터)."""
 import json
 import re
+
 import requests
 
 _OPTIONS = {"num_predict": 512, "num_ctx": 2048}
 
 
-def _call_llm(prompt):
+def _call_llm(prompt: str) -> str:
     resp = requests.post(
         "http://localhost:11434/api/generate",
         json={"model": "qwen3:8b", "prompt": prompt, "stream": False, "options": _OPTIONS},
@@ -13,11 +15,11 @@ def _call_llm(prompt):
     return resp.json()["response"]
 
 
-def _strip_think(text):
+def _strip_think(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
-def _generate_questions(chunk_text, n=3):
+def _generate_questions(chunk_text: str, n: int = 3) -> list[str]:
     prompt = f"""다음 텍스트를 읽고 핵심 내용에 대한 질문 {n}개를 생성하라.
 
 텍스트:
@@ -37,7 +39,7 @@ def _generate_questions(chunk_text, n=3):
     return questions[:n]
 
 
-def _generate_answer(chunk_text, question):
+def _generate_answer(chunk_text: str, question: str) -> str:
     prompt = f"""다음 텍스트를 참고해서 질문에 답하라.
 
 텍스트:
@@ -53,11 +55,11 @@ def _generate_answer(chunk_text, question):
     return _strip_think(_call_llm(prompt))
 
 
-def generate_qa_pairs(parents, questions_per_chunk=3):
+def generate_qa_pairs(parents, questions_per_chunk: int = 3):
     pairs = []
     for i, parent in enumerate(parents):
         chunk_text = parent["text"]
-        page = parent["page"]
+        page       = parent["page"]
 
         questions = _generate_questions(chunk_text, n=questions_per_chunk)
         for q in questions:
@@ -65,8 +67,8 @@ def generate_qa_pairs(parents, questions_per_chunk=3):
                 continue
             answer = _generate_answer(chunk_text, q)
             pairs.append({
-                "question": q,
-                "answer": answer,
+                "question":    q,
+                "answer":      answer,
                 "source_page": page,
                 "source_text": chunk_text,
             })
@@ -74,7 +76,7 @@ def generate_qa_pairs(parents, questions_per_chunk=3):
         yield i + 1, len(parents), pairs[-len(questions):]
 
 
-def save_qa_pairs(pairs, output_path="qa_dataset.jsonl"):
+def save_qa_pairs(pairs, output_path: str = "qa_dataset.jsonl") -> str:
     with open(output_path, "w", encoding="utf-8") as f:
         for pair in pairs:
             f.write(json.dumps(pair, ensure_ascii=False) + "\n")

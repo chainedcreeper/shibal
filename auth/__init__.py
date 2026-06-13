@@ -1,3 +1,4 @@
+"""JWT 인증 + bcrypt 비밀번호 해싱 + 사용자 등록/로그인."""
 import os
 import sqlite3
 from datetime import datetime, timedelta
@@ -7,12 +8,12 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "woosong-ai-tutor-secret-change-me")
-ALGORITHM = "HS256"
+SECRET_KEY        = os.environ.get("SECRET_KEY", "woosong-ai-tutor-secret-change-me")
+ALGORITHM         = "HS256"
 TOKEN_EXPIRE_HOURS = 24
+DB_PATH           = "students.db"
 
-DB_PATH = "students.db"
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_ctx       = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 
@@ -66,18 +67,18 @@ def authenticate_user(student_id: str, password: str):
 
 def create_token(student_id: str, name: str) -> str:
     payload = {
-        "sub": student_id,
+        "sub":  student_id,
         "name": name,
-        "exp": datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_HOURS),
+        "exp":  datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_HOURS),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload    = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         student_id = payload.get("sub")
-        name = payload.get("name")
+        name       = payload.get("name")
         if not student_id:
             raise ValueError
         return {"student_id": student_id, "name": name}
@@ -87,3 +88,10 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             detail="인증이 필요합니다.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+__all__ = [
+    "init_auth_db", "register_user", "authenticate_user",
+    "create_token", "get_current_user",
+    "pwd_ctx", "oauth2_scheme",
+]

@@ -22,15 +22,18 @@ import asyncio
 import json
 from concurrent.futures import ThreadPoolExecutor
 
-import rag as rag_module
-from rag import process_document, ask_stream, ask_full_stream
+from rag      import core as rag_module
+from rag      import process_document, ask_stream, ask_full_stream, generate_qa_pairs, save_qa_pairs
 from document import SUPPORTED_EXTS
-from qa_generator import generate_qa_pairs, save_qa_pairs
-from student_db import init_db, log_interaction, should_train, export_student_data, get_student
-from model_manager import personal_model_exists, ask_personal_stream
-from server_client import ask_server_stream, is_server_available
-from auth import init_auth_db, register_user, authenticate_user, create_token, get_current_user
-from level_assessor import init_level_db, assess_and_update, get_student_level
+from student  import (
+    init_db, log_interaction, should_train, export_student_data, get_student,
+    init_level_db, assess_and_update, get_student_level,
+)
+from llm      import (
+    personal_model_exists, ask_personal_stream,
+    ask_server_stream, is_server_available,
+)
+from auth     import init_auth_db, register_user, authenticate_user, create_token, get_current_user
 
 init_db()
 init_auth_db()

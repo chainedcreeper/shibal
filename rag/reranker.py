@@ -1,3 +1,4 @@
+"""BGE Reranker (CrossEncoder) — k=20 → top 3 재정렬."""
 from sentence_transformers import CrossEncoder
 
 _model = None
@@ -13,8 +14,8 @@ def _get_model():
 def rerank(query, candidates, top_k=3):
     if not candidates:
         return []
-    model = _get_model()
-    pairs = [(query, c["text"]) for c in candidates]
+    model  = _get_model()
+    pairs  = [(query, c["text"]) for c in candidates]
     scores = model.predict(pairs)
     ranked = sorted(zip(scores, candidates), key=lambda x: x[0], reverse=True)
     return [c for _, c in ranked[:top_k]]

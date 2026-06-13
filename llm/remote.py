@@ -1,8 +1,11 @@
+"""외부 GPU 서버 큰 모델 호출 (작은 sLLM 이 못 푸는 복잡한 거 fallback)."""
 import json
+import os
+
 import requests
 
-SERVER_URL = "http://학교서버IP:11434"
-TEACHER_MODEL = "exaone3.5:32b"
+SERVER_URL    = os.getenv("REMOTE_LLM_URL",   "http://학교서버IP:11434")
+TEACHER_MODEL = os.getenv("REMOTE_LLM_MODEL", "exaone3.5:32b")
 
 _PROMPT_TMPL = """너는 대학 강의 AI Tutor다.
 
@@ -24,13 +27,13 @@ _PROMPT_TMPL = """너는 대학 강의 AI Tutor다.
 _OPTIONS = {"num_predict": 1024, "num_ctx": 4096}
 
 
-def ask_server(context, question):
+def ask_server(context: str, question: str) -> str:
     resp = requests.post(
         f"{SERVER_URL}/api/generate",
         json={
-            "model": TEACHER_MODEL,
-            "prompt": _PROMPT_TMPL.format(context=context, question=question),
-            "stream": False,
+            "model":   TEACHER_MODEL,
+            "prompt":  _PROMPT_TMPL.format(context=context, question=question),
+            "stream":  False,
             "options": _OPTIONS,
         },
         timeout=120,
@@ -38,13 +41,13 @@ def ask_server(context, question):
     return resp.json()["response"]
 
 
-def ask_server_stream(context, question):
+def ask_server_stream(context: str, question: str):
     resp = requests.post(
         f"{SERVER_URL}/api/generate",
         json={
-            "model": TEACHER_MODEL,
-            "prompt": _PROMPT_TMPL.format(context=context, question=question),
-            "stream": True,
+            "model":   TEACHER_MODEL,
+            "prompt":  _PROMPT_TMPL.format(context=context, question=question),
+            "stream":  True,
             "options": _OPTIONS,
         },
         stream=True,
@@ -57,7 +60,7 @@ def ask_server_stream(context, question):
                 yield token
 
 
-def is_server_available():
+def is_server_available() -> bool:
     try:
         requests.get(f"{SERVER_URL}/api/tags", timeout=5)
         return True
