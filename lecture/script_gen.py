@@ -64,8 +64,30 @@ def _extract_json_array(raw: str) -> list[dict]:
     m = _ARRAY_RE.search(text)
     if not m:
         raise ValueError("응답에서 JSON 배열을 찾을 수 없음")
-    # strict=False: string literal 안 raw \n, \t, \r 허용 (LLM 응답 안정성)
-    return json.loads(m.group(0), strict=False)
+    raw_json = m.group(0)
+
+    # 시도 1: strict=False (raw \n 허용)
+    try:
+        return json.loads(raw_json, strict=False)
+    except json.JSONDecodeError:
+        pass
+
+    # 시도 2: trailing comma 제거
+    fixed = re.sub(r",(\s*[}\]])", r"\1", raw_json)
+    try:
+        return json.loads(fixed, strict=False)
+    except json.JSONDecodeError:
+        pass
+
+    # 시도 3: json-repair (LLM JSON 오류 자동 수정)
+    try:
+        from json_repair import repair_json
+        return json.loads(repair_json(raw_json), strict=False)
+    except Exception:
+        pass
+
+    # 모두 실패 → 원본 에러 다시
+    return json.loads(raw_json, strict=False)
 
 
 def _validate(slides: list[dict]) -> list[dict]:

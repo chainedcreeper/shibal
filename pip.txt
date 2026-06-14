@@ -6,7 +6,7 @@
    source venv/bin/activate       (Linux/Mac)
 
 2. 의존성 설치 (한 줄)
-pip install fastapi "uvicorn[standard]" requests pymupdf pdfplumber pypdf sentence-transformers faiss-cpu numpy langchain langchain-text-splitters moviepy pillow python-hwpx pyhwp python-pptx lxml olefile surya-ocr paddleocr paddlepaddle==3.1.1 edge-tts "python-jose[cryptography]" "passlib[bcrypt]" python-multipart
+pip install fastapi "uvicorn[standard]" requests pymupdf pdfplumber pypdf sentence-transformers faiss-cpu numpy langchain langchain-text-splitters moviepy pillow python-hwpx pyhwp python-pptx lxml olefile surya-ocr paddleocr paddlepaddle==3.1.1 edge-tts "python-jose[cryptography]" "passlib[bcrypt]" python-multipart json-repair
 
 3. Ollama (별도)
    - https://ollama.com/download 설치 후
