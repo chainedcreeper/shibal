@@ -79,40 +79,27 @@ def _slide_clip(slide: dict, font_path: str) -> CompositeVideoClip:
 
 
 def compose(slides: list[dict], out_path: str) -> str:
-    """슬라이드 리스트(audio_path, png_path, duration, word_times) → mp4 저장.
+    """슬라이드 리스트 → mp4 저장.
 
-    L40S GPU 가 보이면 h264_nvenc (GPU 인코딩, 4~5배 빠름) 사용. 없으면 libx264 폴백.
-    +faststart 박아서 브라우저 progressive 재생 가능.
+    libx264 + ultrafast preset — 학습 영상은 품질 살짝 낮아도 빠른 게 우선.
+    +faststart 로 브라우저 progressive 재생 가능.
+    (nvenc 는 moviepy 와 호환 이슈로 폐기. CUDA 라이브러리 매칭 잘 안 됨.)
     """
     font_path = _find_font()
     clips     = [_slide_clip(s, font_path) for s in slides]
     video     = concatenate_videoclips(clips, method="compose")
 
-    common = dict(
-        fps          = FPS,
-        audio_codec  = "aac",
-        threads      = 4,
-        ffmpeg_params=["-movflags", "+faststart"],
-    )
-
-    if _USE_NVENC:
-        try:
-            video.write_videofile(
-                out_path,
-                codec   = "h264_nvenc",
-                preset  = "p4",          # nvenc 균형 프리셋
-                **common,
-            )
-            return out_path
-        except Exception:
-            # nvenc 시도 실패 시 libx264 폴백
-            pass
-
     video.write_videofile(
         out_path,
-        codec  = "libx264",
-        preset = "medium",
-        **common,
+        codec        = "libx264",
+        preset       = "ultrafast",   # medium → ultrafast (4~5배 빠름, 품질 약간 ↓)
+        fps          = FPS,
+        audio_codec  = "aac",
+        threads      = 8,
+        ffmpeg_params= [
+            "-movflags", "+faststart",
+            "-crf", "23",              # 품질 보정 (기본값, ultrafast 와 균형)
+        ],
     )
     return out_path
 
