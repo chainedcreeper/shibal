@@ -202,9 +202,10 @@
           <div class="spinner" style="width:16px;height:16px"></div> 예상 문제 생성 중...
         </div>
         <div id="ct-exam" class="hidden fade-up">
-          <p class="text-xs font-semibold text-slate-500 mb-2">예상 시험문제</p>
+          <p class="text-xs font-semibold text-slate-500 mb-2">예상 시험문제 <span class="text-[10px] text-slate-400 ml-1">— 정답은 클릭해서 보기</span></p>
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
             <pre id="tx-exam" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></pre>
+            <div id="exam-cards" class="hidden space-y-3"></div>
           </div>
         </div>
       </div>
@@ -410,6 +411,7 @@ function startAnalysis() {
       if (el) el.textContent += d.token;
     } else if (d.event === 'done') {
       setStep(k, 'done');
+      if (k === 'exam') renderExamCards();
       const next = ORDER[ORDER.indexOf(k) + 1];
       if (next) setStep(next, 'active');
     }
@@ -430,6 +432,75 @@ function setStep(key, state) {
     dot.innerHTML   = '<svg viewBox="0 0 10 10" fill="none" style="width:8px;height:8px"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>';
     label.className = 'text-[11px] text-slate-500';
   }
+}
+
+/* ── Exam: 정답 토글 카드 ── */
+function escapeHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function toggleAns(btn) {
+  const ans = btn.nextElementSibling;
+  const hidden = ans.classList.toggle('hidden');
+  btn.textContent = hidden ? '정답 보기' : '정답 숨기기';
+}
+
+function parseExam(text) {
+  const cards = [];
+  const mcStart = text.indexOf('[객관식');
+  const saStart = text.indexOf('[주관식');
+
+  const parseSection = (raw, type) => {
+    if (!raw) return;
+    const blocks = raw.split(/(?=^\s*\d+\.\s)/m).map(b => b.trim()).filter(Boolean);
+    blocks.forEach(b => {
+      const numMatch = b.match(/^(\d+)\.\s*(.+?)(?=\n|$)/);
+      if (!numMatch) return;
+      const num      = numMatch[1];
+      const question = numMatch[2].trim();
+      let choices = '', answer = '';
+      if (type === '객관식') {
+        const c = b.match(/(①[\s\S]*?)(?=\n*정답:|$)/);
+        if (c) choices = c[1].trim();
+        const a = b.match(/정답:[\s\S]*$/);
+        if (a) answer = a[0].trim();
+      } else {
+        const a = b.match(/(모범답안:[\s\S]*)$/);
+        if (a) answer = a[1].trim();
+      }
+      cards.push({ type, num, question, choices, answer });
+    });
+  };
+
+  if (mcStart >= 0 && saStart >= 0) {
+    parseSection(text.slice(mcStart, saStart), '객관식');
+    parseSection(text.slice(saStart),         '주관식');
+  } else if (mcStart >= 0) {
+    parseSection(text.slice(mcStart), '객관식');
+  } else if (saStart >= 0) {
+    parseSection(text.slice(saStart), '주관식');
+  }
+  return cards;
+}
+
+function renderExamCards() {
+  const pre = document.getElementById('tx-exam');
+  const raw = pre.textContent;
+  if (!raw.trim()) return;
+  const cards = parseExam(raw);
+  if (!cards.length) return;
+  pre.classList.add('hidden');
+  const wrap = document.getElementById('exam-cards');
+  wrap.classList.remove('hidden');
+  wrap.innerHTML = cards.map(c => `
+    <div class="border border-slate-200 rounded-lg p-3 bg-slate-50/60">
+      <div class="text-[10px] text-indigo-500 font-semibold mb-1">${c.type} ${c.num}번</div>
+      <div class="text-xs whitespace-pre-wrap text-slate-700">${escapeHtml(c.question)}</div>
+      ${c.choices ? `<div class="text-xs whitespace-pre-wrap text-slate-600 mt-1.5">${escapeHtml(c.choices)}</div>` : ''}
+      <button onclick="toggleAns(this)" class="text-[10px] mt-2 px-2 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200 transition">정답 보기</button>
+      <div class="hidden mt-2 p-2 bg-white border border-indigo-200 rounded text-xs text-slate-700 whitespace-pre-wrap">${escapeHtml(c.answer || '(정답 정보 없음)')}</div>
+    </div>
+  `).join('');
 }
 
 /* ── Video (SSE 진행 표시 + 별도 다운로드) ── */
