@@ -17,14 +17,17 @@ import urllib.request
 
 from PIL import Image, ImageDraw, ImageFont
 
-SIZE          = (1280, 720)
-BG_COLOR      = (22, 27, 38)
-TITLE_COLOR   = (240, 240, 240)
-HEAD_COLOR    = (255, 215, 110)   # 노란 강조
-BODY_COLOR    = (220, 220, 220)
-ACCENT_COLOR  = (110, 130, 180)
-PAGE_COLOR    = (120, 120, 120)
-BULLET_COLOR  = (255, 215, 110)
+SIZE              = (1280, 720)
+
+# 학습 자료 톤 — 따뜻한 오프화이트 + 네이비 + 코랄 강조
+BG_COLOR          = (250, 248, 244)   # 부드러운 오프화이트
+SIDEBAR_COLOR     = (28, 38, 58)      # 짙은 네이비 (좌측 strip)
+TITLE_COLOR       = (28, 38, 58)      # 짙은 네이비
+HEAD_COLOR        = (231, 111, 81)    # 따뜻한 코랄 (헤드라인 강조)
+BODY_COLOR        = (55, 62, 78)      # 부드러운 다크 그레이
+ACCENT_COLOR      = (42, 157, 143)    # 청록 (구분선)
+PAGE_COLOR        = (160, 165, 175)
+BULLET_COLOR      = (231, 111, 81)    # 코랄
 
 _FONT_URL    = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
 _FONT_CACHE  = os.path.expanduser("~/.cache/pj/fonts/NanumGothic-Regular.ttf")
@@ -65,37 +68,39 @@ def render(slide: dict, out_path: str) -> str:
     draw = ImageDraw.Draw(img)
     font = _find_font()
 
-    title_font = ImageFont.truetype(font, 52)
-    head_font  = ImageFont.truetype(font, 34)
+    title_font = ImageFont.truetype(font, 56)
+    head_font  = ImageFont.truetype(font, 32)
     body_font  = ImageFont.truetype(font, 28)
     page_font  = ImageFont.truetype(font, 22)
 
-    # 1) 제목
-    draw.text((70, 50), _wrap(slide["title"], 28), fill=TITLE_COLOR, font=title_font)
+    # 1) 좌측 네이비 strip (디자인 액센트)
+    draw.rectangle([(0, 0), (16, SIZE[1])], fill=SIDEBAR_COLOR)
 
-    # 2) 구분선
-    draw.line([(70, 135), (SIZE[0] - 70, 135)], fill=ACCENT_COLOR, width=3)
+    # 2) 제목 (네이비)
+    draw.text((70, 56), _wrap(slide["title"], 28), fill=TITLE_COLOR, font=title_font)
 
-    # 3) 헤드라인 (옵션, 핵심 한 문장 강조)
-    y = 160
+    # 3) 청록 구분선 (얇게)
+    draw.line([(70, 145), (340, 145)], fill=ACCENT_COLOR, width=4)
+
+    # 4) 헤드라인 (코랄 강조)
+    y = 175
     headline = (slide.get("headline") or "").strip()
     if headline:
-        head_wrapped = _wrap(headline, 36)
-        draw.text((80, y), head_wrapped, fill=HEAD_COLOR, font=head_font, spacing=8)
-        y += _line_height(head_font) * (head_wrapped.count("\n") + 1) + 16
+        head_wrapped = _wrap(headline, 38)
+        draw.text((70, y), head_wrapped, fill=HEAD_COLOR, font=head_font, spacing=8)
+        y += _line_height(head_font) * (head_wrapped.count("\n") + 1) + 24
 
-    # 4) bullets
+    # 5) bullets (다크 그레이)
     body_lh = _line_height(body_font)
     for b in slide["bullets"]:
-        # 불릿 마커
-        draw.text((90, y), "•", fill=BULLET_COLOR, font=body_font)
-        wrapped = _wrap(b, 42)
-        draw.text((120, y), wrapped, fill=BODY_COLOR, font=body_font, spacing=6)
-        y += body_lh * (wrapped.count("\n") + 1) + 12
+        draw.text((80, y), "●", fill=BULLET_COLOR, font=body_font)
+        wrapped = _wrap(b, 44)
+        draw.text((118, y), wrapped, fill=BODY_COLOR, font=body_font, spacing=8)
+        y += body_lh * (wrapped.count("\n") + 1) + 14
         if y > SIZE[1] - 80:
-            break  # 화면 넘으면 중단 (narration 에서 보완됨)
+            break
 
-    # 5) 슬라이드 번호 (우하단)
+    # 6) 슬라이드 번호 (우하단)
     page = f"{slide.get('index', '?')}"
     bbox = draw.textbbox((0, 0), page, font=page_font)
     pw, ph = bbox[2] - bbox[0], bbox[3] - bbox[1]
