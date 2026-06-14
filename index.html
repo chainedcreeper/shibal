@@ -111,8 +111,7 @@
     </div>
 
     <!-- Buttons -->
-    <button id="analyzeBtn" onclick="startAnalysis()" disabled
-            class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-xs font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1">
+    <button id="analyzeBtn" onclick="startAnalysis()" disabled class="hidden">
       🔍 분석 시작
     </button>
 
@@ -368,11 +367,13 @@ async function upload(file) {
     const r = await fetch('/upload', { method: 'POST', body: fd, headers: authHeader() });
     if (!r.ok) throw new Error();
     hide('upSpinner'); show('upDone');
-    setText('upMsg', '완료');
+    setText('upMsg', '완료 · 분석 시작');
     setBtn('analyzeBtn', true);
     setBtn('videoBtn', true);
     setBtn('qaBtn', true);
     document.getElementById('chatDot').className = 'ml-auto w-2 h-2 rounded-full bg-green-400';
+    // 업로드 끝나면 자동 분석 시작 (요약/개념/시험)
+    startAnalysis();
   } catch {
     hide('upSpinner');
     setText('upMsg', '오류 발생');
