@@ -50,19 +50,22 @@ def _probe_duration(mp3_path: str) -> float:
         return 0.0
 
 
-def synthesize_slides(slides: list[dict], out_dir: str, voice: str = DEFAULT_VOICE) -> list[dict]:
+def synthesize_slides(
+    slides: list[dict], out_dir: str, voice: str = DEFAULT_VOICE,
+    on_progress=None,
+) -> list[dict]:
     """슬라이드 리스트 → 각 slide.narration TTS.
 
     각 slide 에 {audio_path, word_times, duration} 채워 반환.
-    빈 narration / 빈 word_times 인 슬라이드도 안전하게 처리:
-    duration 은 ffprobe 실측 → 그래도 0 이면 _MIN_DURATION 으로 패딩.
+    빈 narration / 빈 word_times 인 슬라이드도 안전하게 처리.
+    on_progress(current, total) 가 슬라이드 끝날 때마다 호출됨.
     """
     os.makedirs(out_dir, exist_ok=True)
-    for s in slides:
+    total = len(slides)
+    for i, s in enumerate(slides, 1):
         path = os.path.join(out_dir, f"slide_{s['index']:02d}.mp3")
         narration = (s.get("narration") or "").strip()
         if not narration:
-            # 빈 narration → 무음 패딩 (안 만들면 moviepy 가 죽음)
             narration = s.get("title", "")
         word_times = synthesize(narration, path, voice) if narration else []
 
@@ -76,4 +79,7 @@ def synthesize_slides(slides: list[dict], out_dir: str, voice: str = DEFAULT_VOI
         s["audio_path"] = path
         s["word_times"] = word_times
         s["duration"]   = duration
+        if on_progress:
+            try: on_progress(i, total)
+            except Exception: pass
     return slides

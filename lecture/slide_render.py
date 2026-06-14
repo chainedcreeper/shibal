@@ -73,9 +73,13 @@ def render(slide: dict, out_path: str) -> str:
     return out_path
 
 
-def render_all(slides: list[dict], out_dir: str) -> list[dict]:
+def render_all(slides: list[dict], out_dir: str, on_progress=None) -> list[dict]:
     os.makedirs(out_dir, exist_ok=True)
-    for s in slides:
+    total = len(slides)
+    for i, s in enumerate(slides, 1):
         path = os.path.join(out_dir, f"slide_{s['index']:02d}.png")
         s["png_path"] = render(s, path)
+        if on_progress:
+            try: on_progress(i, total)
+            except Exception: pass
     return slides

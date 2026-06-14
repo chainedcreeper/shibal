@@ -327,23 +327,67 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
     )
 
 
-# ── 인강 영상 ──────────────────────────────────────
+# ── 인강 영상 (SSE 진행 + 별도 다운로드) ────────────
 
-@app.post("/generate-video")
-async def generate_video(user=Depends(get_current_user)):
+def _video_path(student_id: str) -> str:
+    return os.path.join(BASE_DIR, f"lecture_{student_id}.mp4")
+
+
+@app.get("/generate-video")
+async def generate_video(user=Depends(get_user_from_query)):
+    """SSE: 진행 상황 토큰 + 완료 시 download URL."""
     sid = user["student_id"]
     if not has_state(sid):
         raise HTTPException(status_code=400, detail="문서 업로드 필요")
 
-    loop       = asyncio.get_running_loop()
-    level_info = get_student_level(sid)
-    context    = await loop.run_in_executor(executor, lambda: _full_context(sid))
+    async def progress_stream():
+        import queue as q_mod
+        event_queue = q_mod.Queue()
 
-    out_path = os.path.join(BASE_DIR, f"lecture_{sid}.mp4")
-    video_path = await loop.run_in_executor(
-        executor, generate_lecture, context, level_info, out_path
+        def emit(stage, current, total, msg):
+            event_queue.put({
+                "stage":   stage,
+                "current": current,
+                "total":   total,
+                "msg":     msg,
+            })
+
+        def produce():
+            try:
+                level_info = get_student_level(sid)
+                context    = _full_context(sid)
+                out_path   = _video_path(sid)
+                generate_lecture(context, level_info, out_path, on_progress=emit)
+                event_queue.put({"done": True, "url": "/video"})
+            except Exception as e:
+                event_queue.put({"error": str(e)})
+            finally:
+                event_queue.put(None)
+
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(executor, produce)
+
+        yield f"data: {json.dumps({'stage': 'start', 'msg': '인강 생성 시작'}, ensure_ascii=False)}\n\n"
+        while True:
+            item = await loop.run_in_executor(None, event_queue.get)
+            if item is None:
+                break
+            yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        progress_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
-    return FileResponse(video_path, media_type="video/mp4", filename="lecture_video.mp4")
+
+
+@app.get("/video")
+async def get_video(user=Depends(get_user_from_query)):
+    sid  = user["student_id"]
+    path = _video_path(sid)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="인강 영상이 아직 생성되지 않음")
+    return FileResponse(path, media_type="video/mp4", filename="lecture_video.mp4")
 
 
 # ── QA 데이터셋 생성 ───────────────────────────────
