@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 
 from moviepy import (
     AudioFileClip,
@@ -23,6 +24,21 @@ SUBTITLE_FONT_PX = 32
 SUBTITLE_COLOR   = "white"
 SUBTITLE_STROKE  = "black"
 SUBTITLE_Y_REL   = 0.84  # 화면 높이의 84% 위치
+
+
+def _has_nvenc() -> bool:
+    """ffmpeg 가 h264_nvenc 지원하는지 (L40S GPU 인코딩 가능 여부)."""
+    try:
+        out = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return "h264_nvenc" in out.stdout
+    except Exception:
+        return False
+
+
+_USE_NVENC = _has_nvenc()
 
 
 def _slide_clip(slide: dict, font_path: str) -> CompositeVideoClip:
@@ -63,18 +79,40 @@ def _slide_clip(slide: dict, font_path: str) -> CompositeVideoClip:
 
 
 def compose(slides: list[dict], out_path: str) -> str:
-    """슬라이드 리스트(audio_path, png_path, duration, word_times) → mp4 저장."""
+    """슬라이드 리스트(audio_path, png_path, duration, word_times) → mp4 저장.
+
+    L40S GPU 가 보이면 h264_nvenc (GPU 인코딩, 4~5배 빠름) 사용. 없으면 libx264 폴백.
+    +faststart 박아서 브라우저 progressive 재생 가능.
+    """
     font_path = _find_font()
-    clips = [_slide_clip(s, font_path) for s in slides]
-    video = concatenate_videoclips(clips, method="compose")
+    clips     = [_slide_clip(s, font_path) for s in slides]
+    video     = concatenate_videoclips(clips, method="compose")
+
+    common = dict(
+        fps          = FPS,
+        audio_codec  = "aac",
+        threads      = 4,
+        ffmpeg_params=["-movflags", "+faststart"],
+    )
+
+    if _USE_NVENC:
+        try:
+            video.write_videofile(
+                out_path,
+                codec   = "h264_nvenc",
+                preset  = "p4",          # nvenc 균형 프리셋
+                **common,
+            )
+            return out_path
+        except Exception:
+            # nvenc 시도 실패 시 libx264 폴백
+            pass
+
     video.write_videofile(
         out_path,
-        fps=FPS,
-        codec="libx264",
-        audio_codec="aac",
-        threads=4,
-        preset="medium",
-        ffmpeg_params=["-movflags", "+faststart"],  # moov atom 을 앞에 → 브라우저 progressive 재생
+        codec  = "libx264",
+        preset = "medium",
+        **common,
     )
     return out_path
 

@@ -50,36 +50,51 @@ def _probe_duration(mp3_path: str) -> float:
         return 0.0
 
 
+async def _synthesize_one(s: dict, out_dir: str, voice: str) -> dict:
+    path = os.path.join(out_dir, f"slide_{s['index']:02d}.mp3")
+    narration = (s.get("narration") or "").strip()
+    if not narration:
+        narration = s.get("title", "")
+    word_times = await _synthesize_async(narration, path, voice) if narration else []
+
+    duration = word_times[-1]["end"] if word_times else _probe_duration(path)
+    if duration < _MIN_DURATION:
+        duration = _MIN_DURATION
+
+    s["audio_path"] = path
+    s["word_times"] = word_times
+    s["duration"]   = duration
+    return s
+
+
+async def _synthesize_all_async(slides: list[dict], out_dir: str, voice: str, on_progress=None) -> list[dict]:
+    """슬라이드 전체 병렬 TTS — Edge-TTS 동시 호출. asyncio.gather + 진행 콜백."""
+    total = len(slides)
+    completed = 0
+    results: list[dict] = [None] * total
+
+    async def wrapped(idx, slide):
+        nonlocal completed
+        out = await _synthesize_one(slide, out_dir, voice)
+        results[idx] = out
+        completed += 1
+        if on_progress:
+            try: on_progress(completed, total)
+            except Exception: pass
+
+    await asyncio.gather(*(wrapped(i, s) for i, s in enumerate(slides)))
+    return results
+
+
 def synthesize_slides(
     slides: list[dict], out_dir: str, voice: str = DEFAULT_VOICE,
     on_progress=None,
 ) -> list[dict]:
-    """슬라이드 리스트 → 각 slide.narration TTS.
+    """슬라이드별 TTS — 병렬(asyncio.gather)로 동시 호출.
 
+    Edge-TTS 가 외부 MS API 라서 동시 호출 가능 → 직렬 2~3분 → 20~30초.
     각 slide 에 {audio_path, word_times, duration} 채워 반환.
-    빈 narration / 빈 word_times 인 슬라이드도 안전하게 처리.
-    on_progress(current, total) 가 슬라이드 끝날 때마다 호출됨.
+    on_progress(current, total): 슬라이드 끝날 때마다 호출.
     """
     os.makedirs(out_dir, exist_ok=True)
-    total = len(slides)
-    for i, s in enumerate(slides, 1):
-        path = os.path.join(out_dir, f"slide_{s['index']:02d}.mp3")
-        narration = (s.get("narration") or "").strip()
-        if not narration:
-            narration = s.get("title", "")
-        word_times = synthesize(narration, path, voice) if narration else []
-
-        if word_times:
-            duration = word_times[-1]["end"]
-        else:
-            duration = _probe_duration(path)
-        if duration < _MIN_DURATION:
-            duration = _MIN_DURATION
-
-        s["audio_path"] = path
-        s["word_times"] = word_times
-        s["duration"]   = duration
-        if on_progress:
-            try: on_progress(i, total)
-            except Exception: pass
-    return slides
+    return asyncio.run(_synthesize_all_async(slides, out_dir, voice, on_progress))
