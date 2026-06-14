@@ -74,6 +74,7 @@ def compose(slides: list[dict], out_path: str) -> str:
         audio_codec="aac",
         threads=4,
         preset="medium",
+        ffmpeg_params=["-movflags", "+faststart"],  # moov atom 을 앞에 → 브라우저 progressive 재생
     )
     return out_path
 
