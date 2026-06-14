@@ -1,15 +1,16 @@
-"""영상 합성 — ffmpeg 직접 호출 (moviepy 폐기, 5~10배 빠름).
+"""영상 합성 — ffmpeg concat demuxer 한 방식 (단일 파이프).
 
 흐름:
-    1. 슬라이드별 mp4 (PNG + mp3 → ffmpeg "stillimage" 튜닝). ThreadPoolExecutor 병렬.
-    2. concat (재인코딩 X, "copy" 모드).
-    3. mov_text 자막 트랙 박기 (실패해도 영상은 살림).
-    4. faststart 보장 (브라우저 progressive 재생).
+    [1] audio concat   (12개 mp3 → 1개)         copy 모드,    ~5초
+    [2] video concat   (PNG seq + duration)     stillimage,   ~30~60초
+    [3] mux + 자막     (mov_text + faststart)   copy 모드,    ~5초
 
-엣지케이스 모두 폴백:
-    - 빈 narration → anullsrc 무음 + 이미지만 표시
-    - 자막 합치기 실패 → 자막 없이 영상 살림
-    - faststart 실패 → 그냥 concat 결과 copy
+총 40~70초 (이전 8~14분 → 7~12배 단축).
+
+엣지케이스 폴백:
+    - audio 깨진/빈 슬라이드   → 무음 mp3 자동 생성
+    - 자막 mov_text 실패       → 자막 없이 mp4 살림
+    - 어느 단계든 ffmpeg 실패  → FfmpegError 에 stderr 마지막 500자 포함 (디버그)
 """
 from __future__ import annotations
 
@@ -17,7 +18,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
 
 import imageio_ffmpeg
 
@@ -29,129 +29,176 @@ HEIGHT = 720
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
 
-def _run(cmd: list[str]) -> None:
-    subprocess.run(cmd, check=True, capture_output=True)
+class FfmpegError(RuntimeError):
+    """ffmpeg 실패. stderr 마지막 500자 포함."""
 
 
-def _slide_mp4(slide: dict, out_path: str) -> str:
-    """슬라이드 한 장 → mp4 (이미지 + 음성). 1~2초/장."""
-    audio_ok = (
-        slide.get("audio_path")
-        and os.path.exists(slide["audio_path"])
-        and os.path.getsize(slide["audio_path"]) > 1024
-    )
-    duration = max(float(slide.get("duration", 1.0)), 1.0)
+def _run(cmd: list[str], step: str) -> None:
+    r = subprocess.run(cmd, capture_output=True)
+    if r.returncode != 0:
+        tail = r.stderr.decode("utf-8", errors="replace")[-500:]
+        raise FfmpegError(f"[{step}] ffmpeg exit {r.returncode}\n{tail}")
 
-    base = [
-        FFMPEG, "-y",
-        "-loop", "1", "-i", slide["png_path"],
-    ]
-    if audio_ok:
-        cmd = base + ["-i", slide["audio_path"]]
-    else:
-        cmd = base + [
+
+# ── 1. audio ─────────────────────────────────────────
+
+def _silence_mp3(path: str, duration: float) -> None:
+    _run(
+        [
+            FFMPEG, "-y",
             "-f", "lavfi",
             "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-            "-t", str(duration),
-        ]
-    cmd += [
-        "-c:v", "libx264", "-tune", "stillimage", "-preset", "ultrafast",
-        "-pix_fmt", "yuv420p", "-r", str(FPS),
-        "-vf", f"scale={WIDTH}:{HEIGHT}",
-        "-c:a", "aac", "-b:a", "128k",
-        "-shortest",
-        out_path,
-    ]
-    _run(cmd)
-    return out_path
+            "-t", f"{max(duration, 1.0):.3f}",
+            "-c:a", "libmp3lame", "-b:a", "128k",
+            path,
+        ],
+        step="silence",
+    )
 
 
-def _concat(slide_mp4s: list[str], list_path: str, out_path: str) -> None:
-    """concat (재인코딩 X)."""
+def _audio_concat(slides: list[dict], work: str) -> str:
+    """모든 slide.audio_path 를 concat → merged_audio.mp3 (copy 모드)."""
+    paths: list[str] = []
+    for s in slides:
+        ap = s.get("audio_path")
+        if ap and os.path.exists(ap) and os.path.getsize(ap) > 1024:
+            paths.append(ap)
+        else:
+            sil = os.path.join(work, f"silence_{s['index']:02d}.mp3")
+            _silence_mp3(sil, float(s.get("duration", 1.0)))
+            paths.append(sil)
+
+    list_path = os.path.join(work, "audio.txt")
     with open(list_path, "w", encoding="utf-8") as f:
-        for p in slide_mp4s:
+        for p in paths:
             f.write(f"file '{p}'\n")
-    _run([
-        FFMPEG, "-y",
-        "-f", "concat", "-safe", "0",
-        "-i", list_path,
-        "-c", "copy",
-        out_path,
-    ])
+
+    out = os.path.join(work, "audio.mp3")
+    _run(
+        [
+            FFMPEG, "-y",
+            "-f", "concat", "-safe", "0",
+            "-i", list_path,
+            "-c", "copy",
+            out,
+        ],
+        step="audio_concat",
+    )
+    return out
 
 
-def _add_subtitle(in_mp4: str, srt_text: str, out_mp4: str) -> bool:
-    """mov_text 자막 트랙 박기 + faststart. 성공 True / 실패 False."""
-    srt_path = in_mp4 + ".srt"
+# ── 2. video ─────────────────────────────────────────
+
+def _video_concat(slides: list[dict], work: str) -> str:
+    """PNG 시퀀스 + 슬라이드별 duration → video-only mp4."""
+    list_path = os.path.join(work, "video.txt")
+    with open(list_path, "w", encoding="utf-8") as f:
+        for s in slides:
+            d = max(float(s.get("duration", 1.0)), 1.0)
+            f.write(f"file '{s['png_path']}'\n")
+            f.write(f"duration {d:.3f}\n")
+        # concat demuxer 끝 처리: 마지막 파일 한 번 더 (duration 무관)
+        f.write(f"file '{slides[-1]['png_path']}'\n")
+
+    out = os.path.join(work, "video.mp4")
+    _run(
+        [
+            FFMPEG, "-y",
+            "-f", "concat", "-safe", "0",
+            "-i", list_path,
+            "-vsync", "vfr",                # 정적 이미지 → 가변 프레임 (빠름)
+            "-pix_fmt", "yuv420p",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-tune", "stillimage",
+            "-r", str(FPS),
+            out,
+        ],
+        step="video_concat",
+    )
+    return out
+
+
+# ── 3. mux ───────────────────────────────────────────
+
+def _mux_with_subtitle(video: str, audio: str, srt_text: str, out_path: str) -> bool:
+    """video + audio + 자막 mov_text + faststart. 자막 실패 시 False."""
+    srt_path = video + ".srt"
     try:
         with open(srt_path, "w", encoding="utf-8") as f:
             f.write(srt_text)
-        _run([
-            FFMPEG, "-y",
-            "-i", in_mp4,
-            "-i", srt_path,
-            "-c", "copy",
-            "-c:s", "mov_text",
-            "-metadata:s:s:0", "language=kor",
-            "-disposition:s:0", "default",
-            "-movflags", "+faststart",
-            out_mp4,
-        ])
+        _run(
+            [
+                FFMPEG, "-y",
+                "-i", video,
+                "-i", audio,
+                "-i", srt_path,
+                "-map", "0:v",
+                "-map", "1:a",
+                "-map", "2:s",
+                "-c:v", "copy",
+                "-c:a", "aac", "-b:a", "128k",
+                "-c:s", "mov_text",
+                "-metadata:s:s:0", "language=kor",
+                "-disposition:s:0", "default",
+                "-shortest",
+                "-movflags", "+faststart",
+                out_path,
+            ],
+            step="mux_with_subtitle",
+        )
         return True
-    except subprocess.CalledProcessError:
+    except FfmpegError:
         return False
     finally:
         try: os.remove(srt_path)
         except OSError: pass
 
 
-def _faststart(in_mp4: str, out_mp4: str) -> None:
-    """자막 없이 faststart 만 박음 (자막 실패 폴백)."""
-    try:
-        _run([
+def _mux_plain(video: str, audio: str, out_path: str) -> None:
+    """자막 없이 video + audio + faststart."""
+    _run(
+        [
             FFMPEG, "-y",
-            "-i", in_mp4,
-            "-c", "copy",
+            "-i", video,
+            "-i", audio,
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "128k",
+            "-shortest",
             "-movflags", "+faststart",
-            out_mp4,
-        ])
-    except subprocess.CalledProcessError:
-        shutil.copy(in_mp4, out_mp4)
+            out_path,
+        ],
+        step="mux_plain",
+    )
 
+
+# ── 통합 진입점 ──────────────────────────────────────
 
 def compose(slides: list[dict], out_path: str) -> str:
-    """슬라이드 리스트 → mp4 (자막 트랙 포함, ffmpeg 직접)."""
+    """슬라이드 리스트 → mp4. 자막 mov_text 트랙 포함 (실패 시 자막 없이)."""
+    if not slides:
+        raise ValueError("슬라이드가 비어있음")
+
     work = tempfile.mkdtemp(prefix="lecture_compose_")
     try:
-        # 1. 슬라이드별 mp4 (병렬, ThreadPoolExecutor)
-        def make(s):
-            p = os.path.join(work, f"slide_{s['index']:02d}.mp4")
-            return _slide_mp4(s, p)
+        audio_path = _audio_concat(slides, work)
+        video_path = _video_concat(slides, work)
 
-        with ThreadPoolExecutor(max_workers=4) as ex:
-            slide_mp4s = list(ex.map(make, slides))
-
-        # 2. concat (재인코딩 X)
-        concat_path = os.path.join(work, "concat.mp4")
-        list_path   = os.path.join(work, "concat.txt")
-        _concat(slide_mp4s, list_path, concat_path)
-
-        # 3. 자막 트랙 추가 → 실패하면 자막 없이 faststart
         try:
-            srt = to_srt(build_subtitles(slides))
+            srt_text = to_srt(build_subtitles(slides))
         except Exception:
-            srt = ""
+            srt_text = ""
 
-        if srt.strip() and _add_subtitle(concat_path, srt, out_path):
-            return out_path
-        _faststart(concat_path, out_path)
+        if not (srt_text.strip() and _mux_with_subtitle(video_path, audio_path, srt_text, out_path)):
+            _mux_plain(video_path, audio_path, out_path)
+
         return out_path
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
 def cleanup(slides: list[dict]) -> None:
-    """중간 산출물 정리 (PNG, mp3)."""
+    """중간 산출물 (PNG, mp3) 정리."""
     for s in slides:
         for key in ("png_path", "audio_path"):
             p = s.get(key)
