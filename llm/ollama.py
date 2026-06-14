@@ -43,8 +43,12 @@ def _call_ollama(context, question, level_info=None, stream=False):
             "messages": _messages(context, question, level_info),
             "stream":   stream,
             "think":    False,
+            "options": {
+                "num_predict": 8192,   # 긴 JSON 응답도 잘리지 않게
+                "num_ctx":     8192,
+            },
         },
-        timeout=180,
+        timeout=240,
         stream=stream,
     )
     resp.raise_for_status()

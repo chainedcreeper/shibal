@@ -91,21 +91,31 @@ def _extract_json_array(raw: str) -> list[dict]:
 
 
 def _validate(slides: list[dict]) -> list[dict]:
+    """필드 누락은 폴백으로 채워서 슬라이드 살리기 (LLM 응답 잘림 가드)."""
     if not isinstance(slides, list) or not slides:
         raise ValueError("슬라이드 리스트가 비어있음")
     cleaned: list[dict] = []
     for idx, s in enumerate(slides, 1):
-        missing = [k for k in _REQUIRED if k not in s]
-        if missing:
-            raise ValueError(f"슬라이드 {idx} 필드 누락: {missing}")
-        if not isinstance(s["bullets"], list) or not s["bullets"]:
-            raise ValueError(f"슬라이드 {idx}: bullets 형식 오류")
+        title     = str(s.get("title", "")).strip() or f"슬라이드 {idx}"
+        headline  = str(s.get("headline", "")).strip()
+        raw_bull  = s.get("bullets", [])
+        if not isinstance(raw_bull, list):
+            raw_bull = []
+        bullets   = [str(b).strip() for b in raw_bull if str(b).strip()]
+        narration = str(s.get("narration", "")).strip()
+
+        # 폴백: 비었으면 다른 필드에서 합성
+        if not bullets:
+            bullets = [headline] if headline else [title]
+        if not narration:
+            narration = f"{title}. " + " ".join(bullets)
+
         cleaned.append({
             "index":     idx,
-            "title":     str(s["title"]).strip(),
-            "headline":  str(s.get("headline") or "").strip(),
-            "bullets":   [str(b).strip() for b in s["bullets"] if str(b).strip()],
-            "narration": str(s["narration"]).strip(),
+            "title":     title,
+            "headline":  headline,
+            "bullets":   bullets,
+            "narration": narration,
         })
     return cleaned
 
