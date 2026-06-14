@@ -64,7 +64,8 @@ def _extract_json_array(raw: str) -> list[dict]:
     m = _ARRAY_RE.search(text)
     if not m:
         raise ValueError("응답에서 JSON 배열을 찾을 수 없음")
-    return json.loads(m.group(0))
+    # strict=False: string literal 안 raw \n, \t, \r 허용 (LLM 응답 안정성)
+    return json.loads(m.group(0), strict=False)
 
 
 def _validate(slides: list[dict]) -> list[dict]:
