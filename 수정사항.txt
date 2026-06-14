@@ -119,7 +119,37 @@
   - index.html: EventSource ?token= 쿼리, /generate-video Authorization 헤더
   - ★ 검증: 서버 재시작 후에도 인덱스 살아남음 (PID 22498→22695, document-status 동일)
 
-[ 남은 약점 (다음 세션) ]
-  #3 인강 생성 진행 표시 (SSE 또는 작업 큐)
-  #4 실제 한국 대학 HWP/PPTX 자료로 병렬 추출 검증
-  #5 외부 접근 (Kubeflow proxy / Tailscale / SSH 터널)
+[21] #3 인강 생성 진행 표시 SSE (해결)
+  - lecture/pipeline.py: on_progress(stage, current, total, msg) 콜백 받기
+  - lecture/tts_engine.py + slide_render.py: 슬라이드별 progress 콜백
+  - app.py /generate-video: SSE GET + 쿼리 토큰
+    이벤트: start → script → tts (i/N) → render (i/N) → compose → done(url)
+  - app.py /video: 학생별 mp4 별도 다운로드 (인증 + 본인만)
+  - index.html: EventSource 진행 표시, 단계별 가중치
+    (script 5% / tts 30% / render 15% / compose 50%)
+    완료 시 자동 /video fetch → blob → video element src
+
+[22] #4 PPTX 병렬 추출 검증 (해결)
+  - python-pptx 로 한국어 강의 PPTX (4 슬라이드) 생성
+  - /upload 응답: {"status":"ok","filename":"test_dns.pptx","pages":4,"parents":4,"children":4}
+  - rag_indexes/test01/ 에 PPTX 인덱스 정상 생성
+  - python-pptx + zipfile-XML 병렬 추출기 동작 확인
+  - HWPX 실파일 테스트는 사용자 강의자료 확보 시 다음 세션
+
+[23] #5 외부 접근 — cloudflared (해결)
+  - cloudflared 2026.6.0 user-space 설치 (sudo 불필요, 37.4MB)
+  - nohup ./cloudflared tunnel --url http://localhost:7860
+  - 임시 URL 발급: https://<random>.trycloudflare.com
+  - 외부 어디서나 https로 pj UI 접근 가능
+  - 임시 터널이라 cloudflared 죽으면 URL 바뀜
+  - 영구 도메인은 cloudflared tunnel login + 도메인 등록 필요 (별도)
+
+[ 남은 작업 (다음 세션) ]
+  - Kubeflow 오케스트레이션 활용:
+    A. 인강 KFP Pipeline (슬라이드별 TTS/렌더 병렬 → 8분→2~3분)
+    B. 개인화 학습 KFP Job (50개 누적 시 자동 LoRA→GGUF→ollama 등록)
+    C. Kserve InferenceService (qwen3:8b 분리 + 오토스케일링)
+    D. Cron 정기 평가 (KMMLU/teacher_judge 매주 자동)
+    E. 배치 임베딩 파이프라인 (학기 자료 일괄)
+  - 추가 캡슐화 + 전체 구조틀 정돈 (사용자 요청)
+  - 실제 HWP/HWPX 강의자료 업로드 검증 (사용자 자료 확보 후)
