@@ -368,8 +368,17 @@ async def generate_video(user=Depends(get_user_from_query)):
         loop.run_in_executor(executor, produce)
 
         yield f"data: {json.dumps({'stage': 'start', 'msg': '인강 생성 시작'}, ensure_ascii=False)}\n\n"
+        # cloudflared / nginx 등 reverse proxy 의 buffering 방지용 패딩 (2KB)
+        yield ":" + (" " * 2048) + "\n\n"
         while True:
-            item = await loop.run_in_executor(None, event_queue.get)
+            try:
+                item = await asyncio.wait_for(
+                    loop.run_in_executor(None, event_queue.get),
+                    timeout=5,
+                )
+            except asyncio.TimeoutError:
+                yield ": heartbeat\n\n"  # SSE comment — 클라이언트 무시, proxy buffering 깨기
+                continue
             if item is None:
                 break
             yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
