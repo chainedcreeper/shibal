@@ -995,13 +995,25 @@ const STAGE_LABEL = {
 };
 const STAGE_WEIGHT = { script: 5, tts: 30, render: 15, compose: 50 };
 
-function _setVideoProgress(stage, current, total, msg) {
+function _fmtElapsed(sec) {
+  if (!sec || sec < 0) return '';
+  sec = Math.round(sec);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? `${m}분 ${s}초` : `${s}초`;
+}
+
+function _setVideoProgress(stage, current, total, msg, elapsed) {
   const stageEl  = document.getElementById('ld-video-stage');
   const barEl    = document.getElementById('ld-video-bar');
   const detailEl = document.getElementById('ld-video-detail');
 
   if (stageEl)  stageEl.textContent  = STAGE_LABEL[stage] || stage;
-  if (detailEl) detailEl.textContent = msg || (total > 0 ? `${current} / ${total}` : '');
+  let detail = msg || (total > 0 ? `${current} / ${total}` : '');
+  if (elapsed && elapsed > 0) {
+    detail = detail ? `${detail} · ${_fmtElapsed(elapsed)} 경과` : `${_fmtElapsed(elapsed)} 경과`;
+  }
+  if (detailEl) detailEl.textContent = detail;
 
   // 누적 진행률 계산 (단계별 가중치)
   const order = ['script', 'tts', 'render', 'compose'];
@@ -1067,11 +1079,24 @@ function startVideoPolling() {
         showToast('영상 생성 실패: ' + s.error);
         return;
       }
-      _setVideoProgress(s.stage, s.current || 0, s.total || 1, s.msg || '');
+      _setVideoProgress(s.stage, s.current || 0, s.total || 1, s.msg || '', s.elapsed);
       if (s.done && s.url) {
         clearInterval(videoPollInterval); videoPollInterval = null;
         await loadVideoBlob(s.url);
         setBtn('videoBtn', true);
+        if (s.elapsed) showToast(`영상 생성 완료 — ${_fmtElapsed(s.elapsed)} 소요`);
+        // 완료 후에도 어딘가 표시되게 video 컨테이너에 라벨 박기
+        const vEl = document.getElementById('ct-video');
+        if (vEl && s.elapsed) {
+          let badge = document.getElementById('video-elapsed-badge');
+          if (!badge) {
+            badge = document.createElement('div');
+            badge.id = 'video-elapsed-badge';
+            badge.className = 'mt-2 text-xs text-slate-500 text-center';
+            vEl.appendChild(badge);
+          }
+          badge.textContent = `⏱ 생성 소요 ${_fmtElapsed(s.elapsed)}`;
+        }
       }
     } catch {
       // 일시적 네트워크 오류는 다음 poll 에서 재시도

@@ -466,6 +466,7 @@ async def start_video_generation(user=Depends(get_current_user)):
     if not has_state(sid):
         raise HTTPException(status_code=400, detail="문서 업로드 필요")
 
+    import time as _time
     with _video_lock:
         existing = _video_jobs.get(sid)
         if existing and not existing.get("done"):
@@ -477,6 +478,9 @@ async def start_video_generation(user=Depends(get_current_user)):
             "done":    False,
             "error":   None,
             "url":     None,
+            "started_at":   _time.time(),
+            "completed_at": None,
+            "elapsed":      0,
         }
 
     def emit(stage, cur, tot, msg):
@@ -499,15 +503,21 @@ async def start_video_generation(user=Depends(get_current_user)):
             bust = int(os.path.getmtime(out_path)) if os.path.exists(out_path) else 0
             with _video_lock:
                 j = _video_jobs.get(sid, {})
-                j["done"]  = True
-                j["url"]   = f"/video?t={bust}"
-                j["stage"] = "done"
+                j["done"]         = True
+                j["url"]          = f"/video?t={bust}"
+                j["stage"]        = "done"
+                j["completed_at"] = _time.time()
+                if j.get("started_at"):
+                    j["elapsed"] = round(j["completed_at"] - j["started_at"], 1)
         except Exception as e:
             import traceback; traceback.print_exc()
             with _video_lock:
                 j = _video_jobs.get(sid, {})
-                j["done"]  = True
-                j["error"] = str(e)
+                j["done"]         = True
+                j["error"]        = str(e)
+                j["completed_at"] = _time.time()
+                if j.get("started_at"):
+                    j["elapsed"] = round(j["completed_at"] - j["started_at"], 1)
 
     executor.submit(worker)
     return {"status": "started"}
@@ -515,9 +525,14 @@ async def start_video_generation(user=Depends(get_current_user)):
 
 @app.get("/video/status")
 async def get_video_status(user=Depends(get_current_user)):
+    import time as _time
     sid = user["student_id"]
     with _video_lock:
         job = _video_jobs.get(sid)
+        if job:
+            # 진행 중이면 elapsed 동적 계산
+            if not job.get("done") and job.get("started_at"):
+                job = {**job, "elapsed": round(_time.time() - job["started_at"], 1)}
     if job:
         return job
     # 메모리에 job 없는 경우 — 현재 강의자료에 매칭되는 영상이 있을 때만 ready
