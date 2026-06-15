@@ -110,13 +110,15 @@ def _video_concat(slides: list[dict], work: str) -> str:
             FFMPEG, "-y",
             "-f", "concat", "-safe", "0",
             "-i", list_path,
-            # ffmpeg 7+: -r (CFR) + -vsync vfr 동시 사용 금지.
-            # 정적 이미지라 VFR 가 자연스러움 (-fps_mode 가 -vsync 후속).
-            "-fps_mode", "vfr",
+            # CFR 24fps + 매초 keyframe — VFR 은 일부 플레이어가 첫 프레임 못 잡아서 검은 화면.
+            "-fps_mode", "cfr",
+            "-r", str(FPS),
+            "-g", str(FPS),
             "-pix_fmt", "yuv420p",
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-tune", "stillimage",
+            "-profile:v", "high",
             out,
         ],
         step="video_concat",
