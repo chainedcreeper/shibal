@@ -1,6 +1,7 @@
 """로컬 ollama qwen3:8b 호출. 수준별 시스템 프롬프트 분기."""
 import os
 import json
+import re
 
 import requests
 
@@ -16,6 +17,7 @@ _LEVEL_GUIDE = {
 _BASE_SYSTEM = (
     "너는 대학 강의 전문 AI 튜터다. "
     "반드시 주어진 강의 문서를 근거로만 답변하고, 문서에 없는 내용은 추측하지 마라. "
+    "답변은 반드시 한국어로 작성하라 — 영어로 사고 과정을 노출하지 말고 결과만 출력하라. "
     "답변은 체계적이고 명확하게 작성해라."
 )
 
@@ -29,9 +31,10 @@ def _system_prompt(level_info=None):
 
 
 def _messages(context, question, level_info=None):
+    # /no_think — qwen3 시리즈 매직 워드. reasoning 노출 차단
     return [
         {"role": "system", "content": _system_prompt(level_info)},
-        {"role": "user",   "content": f"[강의 문서]\n{context}\n\n[요청]\n{question}"},
+        {"role": "user",   "content": f"[강의 문서]\n{context}\n\n[요청]\n{question}\n\n/no_think"},
     ]
 
 
@@ -55,13 +58,53 @@ def _call_ollama(context, question, level_info=None, stream=False):
     return resp
 
 
+def _strip_reasoning_prefix(text):
+    """영어 reasoning prefix (Okay, Let me, ...) 제거.
+    첫 한국어 또는 형식 마커부터 잘라냄."""
+    if not text:
+        return text
+    m = _HANGUL_RE.search(text)
+    markers = [text.find(c) for c in ("1.", "[", "▶", "#", "▷", "✓")]
+    markers = [i for i in markers if i >= 0]
+    cut = m.start() if m else (min(markers) if markers else -1)
+    return text[cut:] if cut > 0 else text
+
+
 def ask_qwen(context, question, level_info=None):
-    return _call_ollama(context, question, level_info, stream=False).json()["message"]["content"]
+    raw = _call_ollama(context, question, level_info, stream=False).json()["message"]["content"]
+    return _strip_reasoning_prefix(raw)
+
+
+_HANGUL_RE = re.compile(r"[가-힣]")
 
 
 def ask_qwen_stream(context, question, level_info=None):
+    """영어 reasoning prefix (Okay, Let me ...) 자동 필터.
+    첫 한국어 글자 또는 형식 마커(`1.`, `[`, `▶`, `#`) 가 나오기 전까지 버퍼링.
+    """
+    buf       = ""
+    started   = False
     for line in _call_ollama(context, question, level_info, stream=True).iter_lines():
-        if line:
-            token = json.loads(line).get("message", {}).get("content", "")
-            if token:
-                yield token
+        if not line:
+            continue
+        token = json.loads(line).get("message", {}).get("content", "")
+        if not token:
+            continue
+        if started:
+            yield token
+            continue
+        buf += token
+        # 한국어 또는 형식 마커 발견 시 시작 — 그 위치부터 yield
+        m = _HANGUL_RE.search(buf)
+        markers = [buf.find(c) for c in ("1.", "[", "▶", "#", "▷", "✓")]
+        markers = [i for i in markers if i >= 0]
+        cut = m.start() if m else (min(markers) if markers else -1)
+        if cut >= 0:
+            yield buf[cut:]
+            buf = ""
+            started = True
+        # 너무 길어지면 강제 시작 (안전장치)
+        elif len(buf) > 2000:
+            yield buf
+            buf = ""
+            started = True
