@@ -1,0 +1,45 @@
+# pj — AI Tutor 의존성
+# 설치: pip install -r requirements.txt
+# Ollama 는 별도 설치: https://ollama.com/download → ollama pull qwen3:8b
+
+# ── 웹 서버 ──
+fastapi
+uvicorn[standard]
+python-multipart
+
+# ── 인증 ──
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt<4.1                       # passlib 1.7.x 호환 (bcrypt 5.x 와 충돌)
+
+# ── HTTP / 유틸 ──
+requests
+json-repair
+
+# ── 문서 파싱 (병렬 추출) ──
+pymupdf
+pdfplumber
+pypdf
+python-hwpx
+pyhwp
+python-pptx
+lxml
+olefile
+
+# ── OCR (선택적) ──
+surya-ocr
+paddleocr
+paddlepaddle==3.1.1
+
+# ── RAG (임베딩 + 검색 + 청킹) ──
+sentence-transformers
+faiss-cpu
+numpy
+langchain
+langchain-text-splitters
+
+# ── 인강 영상 ──
+edge-tts
+pillow
+moviepy
+# ffmpeg 는 시스템 패키지 — apt/winget/brew 로 별도 설치

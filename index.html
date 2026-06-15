@@ -417,6 +417,8 @@ async function upload(file) {
     resetVideoEl();
     // 업로드 끝나면 자동 분석 시작 (요약/개념/시험)
     startAnalysis();
+    // 영상도 백그라운드 자동 생성 (탭 전환 안 함 — 분석 보는 중일 수 있음)
+    startVideoBackground();
   } catch {
     hide('upSpinner');
     setText('upMsg', '오류 발생');
@@ -1039,6 +1041,19 @@ async function generateVideo() {
     return;
   }
   startVideoPolling();
+}
+
+/* 업로드 직후 자동 호출 — 탭 전환/UI 변경 없이 백그라운드만 시작 */
+async function startVideoBackground() {
+  try {
+    const r = await fetch('/video/generate', { method: 'POST', headers: authHeader() });
+    if (!r.ok) return;
+    setBtn('videoBtn', false);
+    showToast('영상도 백그라운드에서 생성 중 — 영상 탭에서 진행 확인 가능');
+    startVideoPolling();
+  } catch {
+    // 자동 호출 실패는 조용히 — 사용자가 직접 버튼 누를 수 있음
+  }
 }
 
 function startVideoPolling() {

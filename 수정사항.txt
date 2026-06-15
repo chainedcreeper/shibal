@@ -144,12 +144,67 @@
   - 임시 터널이라 cloudflared 죽으면 URL 바뀜
   - 영구 도메인은 cloudflared tunnel login + 도메인 등록 필요 (별도)
 
-[ 남은 작업 (다음 세션) ]
-  - Kubeflow 오케스트레이션 활용:
-    A. 인강 KFP Pipeline (슬라이드별 TTS/렌더 병렬 → 8분→2~3분)
-    B. 개인화 학습 KFP Job (50개 누적 시 자동 LoRA→GGUF→ollama 등록)
-    C. Kserve InferenceService (qwen3:8b 분리 + 오토스케일링)
-    D. Cron 정기 평가 (KMMLU/teacher_judge 매주 자동)
-    E. 배치 임베딩 파이프라인 (학기 자료 일괄)
-  - 추가 캡슐화 + 전체 구조틀 정돈 (사용자 요청)
-  - 실제 HWP/HWPX 강의자료 업로드 검증 (사용자 자료 확보 후)
+===== 2026-06-15 ~ 06-16 작업 (최종 정리 세션) =====
+
+[24] 시험 인터랙티브 UI 강화 (index.html)
+  - parseExam: 마크다운 강조([객관식], **[객관식 5문제]** 등) 허용
+    라벨 없으면 auto 모드 — 보기(①②③④⑤) 유무로 객관식/주관식 자동 판별
+  - parseChoices: ①②③④⑤ 외 1) 2) 3) 4) 5) 형식 fallback
+  - parseAnswerNum: "정답:", "답:", **정답**: 등 변형 매치
+  - 보기 버튼 디자인 다이어트 (border-2→border, py-3.5→py-2.5, 번호 뱃지 제거)
+  - 파싱 실패 시 호박색 경고 배너 + 재시도 버튼 + 콘솔 경고
+
+[25] 시험 모드 batch 단일화
+  - mode 토글 (instant/batch) 제거 — 항상 다 풀고 채점
+  - 보기에 라디오 도트(●) 추가 — 선택 상태 명확히
+  - 채점 후에만 정답/오답 공개 (✓ 정답 / ✕ 내답 라벨)
+  - 진행바에 "X / N 답함" 카운터 + 미답 호박색 힌트
+
+[26] 영상 강의자료별 보관 (app.py)
+  - lecture_<sid>_<safe_filename>.mp4 로 저장
+  - _video_path: get_meta 에서 현재 자료 filename 가져와 path 생성
+  - _safe_name: 파일명 sanitize 헬퍼 (한국어/숫자/_-. 만 허용)
+  - 같은 자료 재업로드 시 옛 영상 자동 매칭 (재활용)
+  - 다른 자료로 바꾸면 새 path → status idle → 사용자가 명시 생성
+
+[27] 옛 영상 매칭 완전 차단
+  - _video_path: 메타 없으면 None 반환 (sid-only fallback 제거)
+  - /video, /video/status: has_state 가드 추가
+  - status 응답 url 에 ?t=<mtime> cache-buster 박음
+  - /video: Cache-Control no-store 헤더
+  - 프론트 resetVideoEl(): blob URL revoke + src 비우기 + placeholder
+  - /upload 성공 시 자동 호출
+  - syncVideoOnEnter idle 분기에서도 호출
+
+[28] video 직접 src (blob 폐기)
+  - fetch → blob → URL.createObjectURL → src  방식 폐기
+  - <video src="/video?t=<mtime>&token=<jwt>"> 직접 박기
+  - video.load() 강제 reload → 캐시 우회 + 메모리 잔재 없음
+  - 큰 영상도 스트리밍 (blob 처럼 통째 다운 안 함)
+
+[29] Python 3.9 호환 hotfix
+  - _video_path 의 `str | None` (PEP 604, 3.10+) → 타입 힌트 제거
+  - conda base 3.9 에서 SyntaxError 나서 서버 부팅 실패하던 거 수정
+
+[30] 영상 자동 생성
+  - upload 성공 시 startVideoBackground() 호출
+  - 백그라운드로 /video/generate POST + 폴링 시작
+  - 탭 전환 안 함 — 사용자가 분석 보는 중일 수 있음
+  - 토스트 알림: "영상도 백그라운드에서 생성 중"
+
+[31] 환경변수 config.py 통합
+  - config.py 신설 — 모든 환경변수 + 기본값 중앙 명세
+  - summary() 함수: 현재 설정 디버깅 출력
+  - local.env.example 신설 — 사용자가 복사해서 채워 쓰는 템플릿
+  - 기존 코드 (os.getenv 직접 호출) 는 그대로 — config 가 SOURCE OF TRUTH 역할
+
+[32] requirements.txt + README.md
+  - requirements.txt: pip 표준 형식. bcrypt<4.1 고정 등 명시
+  - README.md: 설치/환경변수/실행/폴더구조/트러블슈팅 한 문서로
+  - "처음 보는 사람도 띄울 수 있게" — Ollama/ffmpeg 시스템 의존성 명시
+
+[ 남은 작업 (선택, 옵션 — 핵심 동작은 모두 완료) ]
+  - Kubeflow KFP Pipeline 자동화 (인강 병렬화, 개인화 학습 트리거)
+  - Kserve InferenceService (멀티 사용자 동시 사용 늘면)
+  - HWP 실파일 업로드 검증 (사용자 자료 확보 후)
+  - 정기 평가 cron (KMMLU/teacher_judge)

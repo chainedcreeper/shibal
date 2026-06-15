@@ -1,43 +1,54 @@
 ===== TODO =====
 
-[1] 프롬프트 튜닝 (사용자가 직접 할 예정)
-  - app.py의 PROMPTS 리스트 수정
-  - summary / concepts / exam 프롬프트 이쁘게 다듬기
-  - 위치: app.py 95번째 줄 근처 PROMPTS 변수
+[1] 프롬프트 튜닝 (사용자가 직접)
+  - app.py 의 PROMPTS 리스트 (line 176 근처)
+  - summary / concepts / exam 프롬프트 다듬기
 
-[2] 48GB 서버 연결 시 Map-Reduce 복원
-  - server_client.py에 ask_mapreduce_server() 추가
-  - 현재 로컬은 ask_full() 사용 중 (LLM 1번 호출)
-  - 서버 연결 후 rag.py ask_mapreduce() 함수 살려서 적용
+[2] 학교 서버 IP 동적 설정
+  - llm/remote.py 의 SERVER_URL 환경변수로 분리 완료
+  - 사용: REMOTE_LLM_URL=http://<IP>:11434 (local.env 또는 export)
 
-[3] 학교 서버 IP 설정
-  - server_client.py 3번째 줄
-  - SERVER_URL = "http://학교서버IP:11434" 여기에 실제 IP 입력
+[3] Kubeflow 개인화 학습 파이프라인 (KFP)
+  - train_personal.py 가 학생별 50개 이상 대화 쌓이면 트리거
+  - EXAONE-3.5-2.4B QLoRA SFT
+  - 추후 KFP Pipeline 으로 자동화 가능 (현재는 수동 트리거)
 
-[4] Kubeflow 개인화 학습 파이프라인
-  - train_personal.py 서버에서 실행
-  - 학생별 50개 이상 대화 쌓이면 학습 트리거
-  - EXAONE-3.5-2.4B 기반 QLoRA SFT
+[4] 인강 KFP Pipeline (선택)
+  - 슬라이드별 TTS/렌더 병렬화 → 현재 약 2-3분 → 1분대 단축 가능
+  - 현재는 단일 워커로도 충분
 
-[5] TTS 품질 개선 (gTTS → 더 자연스러운 TTS) ✅ 완료 (2026-06-14)
-  - Edge-TTS (ko-KR-SunHiNeural) 적용
-  - 단어 단위 타임스탬프 수집 → 자막 burn-in
-  - 위치: lecture/tts_engine.py
+[5] Kserve InferenceService (선택)
+  - qwen3:8b 를 K8s 분리 + 오토스케일링
+  - 멀티 사용자 동시 사용 늘면 필요
 
-[6] 인강 자동 생성 파이프라인 ✅ 완료 (2026-06-14)
-  - lecture/ 모듈: script_gen + tts_engine + slide_render + subtitle + video_compose
-  - 엔드포인트: /generate-video (JWT + 학생 수준 적용)
-  - generate_lecture(context, level_info, out_path) 한 줄로 끝
+==========================================
+이미 완료된 것 (히스토리)
+==========================================
 
-[7] HWP/HWPX 지원 ✅ 완료 (2026-06-14)
-  - rhwp-python (HWP5 + HWPX 동일 API)
-  - document/ 모듈로 PDF + HWP 통합
+[A] TTS 품질 개선 (gTTS → Edge-TTS) ✅ 2026-06-14
+[B] 인강 자동 생성 파이프라인 ✅ 2026-06-14
+[C] HWP/HWPX/PPTX 병렬 추출 ✅ 2026-06-14
+[D] 사용자별 RAG 인덱스 + 디스크 영속화 ✅ 2026-06-14
+[E] cloudflared 외부 접근 ✅ 2026-06-14
+[F] 시험 인터랙티브 카드 UI + 라디오 체크 ✅ 2026-06-16
+[G] 영상 강의자료별 보관 (lecture_<sid>_<filename>.mp4) ✅ 2026-06-16
+[H] 영상 자동 생성 (업로드 즉시 백그라운드) ✅ 2026-06-16
+[I] 환경변수 config.py 통합 + local.env.example ✅ 2026-06-16
+[J] requirements.txt 표준화 + README.md ✅ 2026-06-16
 
-[8] ffmpeg 시스템 설치 필요
-  - moviepy가 ffmpeg 호출
-  - Kubeflow: conda install -c conda-forge ffmpeg
-  - Windows: choco install ffmpeg 또는 https://ffmpeg.org/download.html
+==========================================
+시스템 요구사항
+==========================================
 
-[9] 한글 폰트 (영상 슬라이드용)
-  - slide_render.py가 자동 탐색 + 다운로드
-  - 후보: NanumGothic, NotoSansCJK, AppleSDGothicNeo, malgun
+- Python 3.9+ (3.10+ 권장)
+- Ollama (https://ollama.com/download)
+- ffmpeg (영상 합치기) — 시스템 패키지
+- 한글 폰트 — slide_render.py 자동 탐색 (NanumGothic, NotoSansCJK, AppleSDGothicNeo, malgun)
+
+==========================================
+운영 시 주의
+==========================================
+
+- SECRET_KEY 반드시 변경 (config.py 기본값 사용 금지)
+- bcrypt<4.1 고정 (passlib 1.7.x 호환)
+- GPU 있으면 SURYA_DEVICE=cuda 로 변경 (OCR 속도 향상)
