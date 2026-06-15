@@ -43,13 +43,13 @@ def _run(cmd: list[str], step: str) -> None:
 # ── 1. audio ─────────────────────────────────────────
 
 def _silence_mp3(path: str, duration: float) -> None:
+    """무음 mp3 — ffmpeg 가 확장자 보고 자동 인코더 선택 (libmp3lame 없어도 동작)."""
     _run(
         [
             FFMPEG, "-y",
             "-f", "lavfi",
             "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
             "-t", f"{max(duration, 1.0):.3f}",
-            "-c:a", "libmp3lame", "-b:a", "128k",
             path,
         ],
         step="silence",
@@ -73,13 +73,17 @@ def _audio_concat(slides: list[dict], work: str) -> str:
         for p in paths:
             f.write(f"file '{p}'\n")
 
+    # copy 모드는 sample rate / channels mismatch 시 실패.
+    # Edge-TTS (보통 24kHz mono) + anullsrc (44.1kHz stereo) 섞일 수 있어서
+    # libmp3lame 으로 통일 re-encode (영상 7분짜리도 5~10초).
     out = os.path.join(work, "audio.mp3")
     _run(
         [
             FFMPEG, "-y",
             "-f", "concat", "-safe", "0",
             "-i", list_path,
-            "-c", "copy",
+            "-ar", "44100", "-ac", "2",
+            "-c:a", "libmp3lame", "-b:a", "128k",
             out,
         ],
         step="audio_concat",
