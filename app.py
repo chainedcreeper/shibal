@@ -160,6 +160,16 @@ async def upload_document(
         except Exception:
             pass
 
+    # 새 자료 들어왔으니 옛 영상 + 영상 job 무효화
+    old_video = _video_path(student_id)
+    if os.path.exists(old_video):
+        try:
+            os.unlink(old_video)
+        except Exception:
+            pass
+    with _video_lock:
+        _video_jobs.pop(student_id, None)
+
     return {"status": "ok", "filename": filename, **info}
 
 
