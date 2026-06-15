@@ -32,6 +32,8 @@ from document import SUPPORTED_EXTS
 from student import (
     init_db, log_interaction, should_train, export_student_data, get_student,
     init_level_db, assess_and_update, get_student_level,
+    init_notes_db, add_note, list_notes, delete_note, update_note_category,
+    init_schedule_db, add_schedule, list_schedules, update_schedule, delete_schedule,
 )
 from llm import (
     personal_model_exists, ask_personal_stream,
@@ -46,6 +48,8 @@ from lecture import generate_lecture
 init_db()
 init_auth_db()
 init_level_db()
+init_notes_db()
+init_schedule_db()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app      = FastAPI()
@@ -62,6 +66,29 @@ class RegisterRequest(BaseModel):
 
 class ChatMessage(BaseModel):
     message: str
+
+
+class NoteRequest(BaseModel):
+    content:  str
+    category: str = "general"   # general / exam / important
+    source:   str = "manual"
+
+
+class NoteCategory(BaseModel):
+    category: str
+
+
+class ScheduleRequest(BaseModel):
+    date:  str          # YYYY-MM-DD
+    title: str
+    note:  str = ""
+
+
+class ScheduleUpdate(BaseModel):
+    date:  str | None = None
+    title: str | None = None
+    note:  str | None = None
+    done:  bool | None = None
 
 
 # ── 인증 ────────────────────────────────────────────
@@ -463,6 +490,60 @@ async def export_student(student_id: str, user=Depends(get_current_user)):
         "model_trained": info["model_trained"],
         "exported_to":   path,
     }
+
+
+# ── 노트 (저장/모아보기/삭제/카테고리 변경) ─────────
+
+@app.post("/notes")
+async def post_note(req: NoteRequest, user=Depends(get_current_user)):
+    note_id = add_note(user["student_id"], req.content, req.category, req.source)
+    return {"id": note_id}
+
+
+@app.get("/notes")
+async def get_notes(category: str | None = None, user=Depends(get_current_user)):
+    return list_notes(user["student_id"], category)
+
+
+@app.delete("/notes/{note_id}")
+async def del_note(note_id: int, user=Depends(get_current_user)):
+    if not delete_note(user["student_id"], note_id):
+        raise HTTPException(status_code=404, detail="노트 없음")
+    return {"ok": True}
+
+
+@app.patch("/notes/{note_id}")
+async def patch_note(note_id: int, req: NoteCategory, user=Depends(get_current_user)):
+    if not update_note_category(user["student_id"], note_id, req.category):
+        raise HTTPException(status_code=404, detail="노트 없음")
+    return {"ok": True}
+
+
+# ── 학습 일정 (CRUD) ──────────────────────────────
+
+@app.post("/schedule")
+async def post_schedule(req: ScheduleRequest, user=Depends(get_current_user)):
+    sid = add_schedule(user["student_id"], req.date, req.title, req.note)
+    return {"id": sid}
+
+
+@app.get("/schedule")
+async def get_schedule(user=Depends(get_current_user)):
+    return list_schedules(user["student_id"])
+
+
+@app.patch("/schedule/{sched_id}")
+async def patch_schedule(sched_id: int, req: ScheduleUpdate, user=Depends(get_current_user)):
+    if not update_schedule(user["student_id"], sched_id, **req.dict(exclude_none=True)):
+        raise HTTPException(status_code=404, detail="일정 없음")
+    return {"ok": True}
+
+
+@app.delete("/schedule/{sched_id}")
+async def del_schedule(sched_id: int, user=Depends(get_current_user)):
+    if not delete_schedule(user["student_id"], sched_id):
+        raise HTTPException(status_code=404, detail="일정 없음")
+    return {"ok": True}
 
 
 if __name__ == "__main__":

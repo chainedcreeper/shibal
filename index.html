@@ -152,6 +152,8 @@
       <button class="tab-btn           px-4 py-3 text-xs font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors" onclick="switchTab('concepts',this)">🧠 핵심 개념</button>
       <button class="tab-btn           px-4 py-3 text-xs font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors" onclick="switchTab('exam',this)">📝 예상 문제</button>
       <button class="tab-btn           px-4 py-3 text-xs font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors" onclick="switchTab('video',this)">🎬 강의 영상</button>
+      <button class="tab-btn           px-4 py-3 text-xs font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors" onclick="switchTab('notes',this)">📌 내용 정리</button>
+      <button class="tab-btn           px-4 py-3 text-xs font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors" onclick="switchTab('schedule',this)">📅 일정</button>
     </div>
 
     <!-- Panels -->
@@ -167,7 +169,10 @@
           <div class="spinner" style="width:16px;height:16px"></div> 요약 생성 중...
         </div>
         <div id="ct-summary" class="hidden fade-up">
-          <p class="text-xs font-semibold text-slate-500 mb-2">강의 요약</p>
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-semibold text-slate-500">강의 요약</p>
+            <button onclick="saveAsNote(document.getElementById('tx-summary').textContent, 'analyze:summary', 'general')" class="text-[10px] px-2 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200">📌 저장</button>
+          </div>
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
             <pre id="tx-summary" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></pre>
           </div>
@@ -184,7 +189,10 @@
           <div class="spinner" style="width:16px;height:16px"></div> 핵심 개념 추출 중...
         </div>
         <div id="ct-concepts" class="hidden fade-up">
-          <p class="text-xs font-semibold text-slate-500 mb-2">핵심 개념 정리</p>
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-semibold text-slate-500">핵심 개념 정리</p>
+            <button onclick="saveAsNote(document.getElementById('tx-concepts').textContent, 'analyze:concepts', 'important')" class="text-[10px] px-2 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200">📌 저장</button>
+          </div>
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
             <pre id="tx-concepts" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></pre>
           </div>
@@ -201,12 +209,55 @@
           <div class="spinner" style="width:16px;height:16px"></div> 예상 문제 생성 중...
         </div>
         <div id="ct-exam" class="hidden fade-up">
-          <p class="text-xs font-semibold text-slate-500 mb-2">예상 시험문제 <span class="text-[10px] text-slate-400 ml-1">— 정답은 클릭해서 보기</span></p>
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-semibold text-slate-500">예상 시험문제 <span class="text-[10px] text-slate-400 ml-1">— 보기 클릭하면 채점</span></p>
+            <button onclick="saveAsNote(document.getElementById('tx-exam').textContent, 'analyze:exam', 'exam')" class="text-[10px] px-2 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200">📌 시험 대비 저장</button>
+          </div>
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
             <pre id="tx-exam" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></pre>
             <div id="exam-cards" class="hidden space-y-3"></div>
           </div>
         </div>
+      </div>
+
+      <!-- Notes -->
+      <div id="tab-notes" class="tab-panel absolute inset-0 overflow-y-auto p-5 hidden">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs font-semibold text-slate-500">내용 정리</p>
+          <div class="flex gap-1" id="note-filters">
+            <button data-cat="all"       onclick="filterNotes(this,'all')"       class="filter-btn text-[10px] px-2 py-1 bg-indigo-500 text-white rounded">전체</button>
+            <button data-cat="general"   onclick="filterNotes(this,'general')"   class="filter-btn text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded">일반</button>
+            <button data-cat="exam"      onclick="filterNotes(this,'exam')"      class="filter-btn text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded">시험 대비</button>
+            <button data-cat="important" onclick="filterNotes(this,'important')" class="filter-btn text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded">중요</button>
+          </div>
+        </div>
+        <div id="notes-list" class="space-y-2"></div>
+        <div class="mt-4 p-3 border-t border-slate-200">
+          <textarea id="note-input" rows="2" class="w-full text-xs border border-slate-200 rounded p-2" placeholder="새 노트 추가…"></textarea>
+          <div class="flex gap-2 mt-2 items-center">
+            <select id="note-cat" class="text-[10px] border border-slate-200 rounded px-2 py-1">
+              <option value="general">일반</option>
+              <option value="exam">시험 대비</option>
+              <option value="important">중요</option>
+            </select>
+            <button onclick="addNoteManual()" class="text-[10px] ml-auto px-3 py-1.5 bg-indigo-500 text-white rounded hover:bg-indigo-600">저장</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Schedule -->
+      <div id="tab-schedule" class="tab-panel absolute inset-0 overflow-y-auto p-5 hidden">
+        <p class="text-xs font-semibold text-slate-500 mb-3">학습 일정</p>
+        <div class="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+          <div class="flex gap-2 mb-2">
+            <input type="date" id="sched-date" class="text-xs border border-slate-200 rounded px-2 py-1">
+            <input type="text" id="sched-title" placeholder="제목" class="text-xs border border-slate-200 rounded px-2 py-1 flex-1">
+          </div>
+          <textarea id="sched-note" rows="1" placeholder="메모 (선택)" class="w-full text-xs border border-slate-200 rounded p-2"></textarea>
+          <button onclick="addScheduleManual()" class="text-[10px] mt-2 px-3 py-1.5 bg-indigo-500 text-white rounded hover:bg-indigo-600 float-right">일정 추가</button>
+          <div class="clear-both"></div>
+        </div>
+        <div id="schedule-list" class="space-y-2"></div>
       </div>
 
       <!-- Video -->
@@ -435,6 +486,156 @@ function setStep(key, state) {
   }
 }
 
+/* ── Toast (작은 알림) ── */
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-4 py-2 rounded-lg shadow-lg z-50 fade-up';
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 1500);
+  setTimeout(() => t.remove(), 2000);
+}
+
+/* ── Notes ── */
+const CAT_LABEL = { general: '일반', exam: '시험 대비', important: '중요' };
+const CAT_TONE  = { general: 'bg-slate-100 text-slate-600', exam: 'bg-rose-100 text-rose-600', important: 'bg-amber-100 text-amber-700' };
+let currentNoteFilter = 'all';
+
+async function loadNotes() {
+  if (!authToken) return;
+  const url = currentNoteFilter && currentNoteFilter !== 'all' ? `/notes?category=${currentNoteFilter}` : '/notes';
+  const r = await fetch(url, { headers: authHeader() });
+  if (!r.ok) return;
+  const notes = await r.json();
+  const list = document.getElementById('notes-list');
+  if (!notes.length) {
+    list.innerHTML = '<div class="text-xs text-slate-400 text-center py-8">저장된 노트가 없어요</div>';
+    return;
+  }
+  list.innerHTML = notes.map(n => `
+    <div class="border border-slate-200 rounded-lg p-3 bg-white">
+      <div class="flex items-center gap-2 mb-1.5">
+        <span class="text-[10px] px-1.5 py-0.5 ${CAT_TONE[n.category] || CAT_TONE.general} rounded">${CAT_LABEL[n.category] || n.category}</span>
+        <span class="text-[10px] text-slate-400">${escapeHtml(n.source || '')} · ${(n.created_at || '').slice(0, 16)}</span>
+        <button onclick="deleteNote(${n.id})" class="ml-auto text-slate-300 hover:text-red-500 text-base leading-none">×</button>
+      </div>
+      <div class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(n.content)}</div>
+    </div>
+  `).join('');
+}
+
+function filterNotes(btn, cat) {
+  document.querySelectorAll('#note-filters .filter-btn').forEach(b => {
+    b.classList.remove('bg-indigo-500', 'text-white');
+    b.classList.add('bg-slate-100', 'text-slate-600');
+  });
+  btn.classList.remove('bg-slate-100', 'text-slate-600');
+  btn.classList.add('bg-indigo-500', 'text-white');
+  currentNoteFilter = cat;
+  loadNotes();
+}
+
+async function addNoteManual() {
+  const content = document.getElementById('note-input').value.trim();
+  if (!content) { showToast('내용을 입력해줘'); return; }
+  const category = document.getElementById('note-cat').value;
+  const r = await fetch('/notes', {
+    method: 'POST',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, category, source: 'manual' }),
+  });
+  if (r.ok) {
+    document.getElementById('note-input').value = '';
+    showToast('노트 저장됨 📌');
+    loadNotes();
+  }
+}
+
+async function saveAsNote(content, source = 'chat', category = 'general') {
+  if (!content || !content.trim()) return;
+  const r = await fetch('/notes', {
+    method: 'POST',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: content.trim(), category, source }),
+  });
+  if (r.ok) showToast('노트 저장됨 📌');
+}
+
+async function deleteNote(id) {
+  await fetch(`/notes/${id}`, { method: 'DELETE', headers: authHeader() });
+  loadNotes();
+}
+
+/* ── Schedule ── */
+async function loadSchedule() {
+  if (!authToken) return;
+  const r = await fetch('/schedule', { headers: authHeader() });
+  if (!r.ok) return;
+  const items = await r.json();
+  const list = document.getElementById('schedule-list');
+  if (!items.length) {
+    list.innerHTML = '<div class="text-xs text-slate-400 text-center py-8">일정 없어요</div>';
+    return;
+  }
+  list.innerHTML = items.map(s => `
+    <div class="flex items-start gap-2 p-3 border border-slate-200 rounded-lg bg-white ${s.done ? 'opacity-60' : ''}">
+      <input type="checkbox" ${s.done ? 'checked' : ''} onchange="toggleSchedule(${s.id}, this.checked)" class="mt-1 cursor-pointer">
+      <div class="flex-1 min-w-0">
+        <div class="text-[10px] text-indigo-500 font-medium">${escapeHtml(s.date)}</div>
+        <div class="text-xs font-semibold text-slate-700 ${s.done ? 'line-through' : ''}">${escapeHtml(s.title)}</div>
+        ${s.note ? `<div class="text-[11px] text-slate-500 mt-1 whitespace-pre-wrap">${escapeHtml(s.note)}</div>` : ''}
+      </div>
+      <button onclick="deleteSchedule(${s.id})" class="text-slate-300 hover:text-red-500 text-base leading-none">×</button>
+    </div>
+  `).join('');
+}
+
+async function addScheduleManual() {
+  const date  = document.getElementById('sched-date').value;
+  const title = document.getElementById('sched-title').value.trim();
+  const note  = document.getElementById('sched-note').value.trim();
+  if (!date || !title) { showToast('날짜와 제목 필요'); return; }
+  const r = await fetch('/schedule', {
+    method: 'POST',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date, title, note }),
+  });
+  if (r.ok) {
+    document.getElementById('sched-title').value = '';
+    document.getElementById('sched-note').value  = '';
+    showToast('일정 추가됨 📅');
+    loadSchedule();
+  }
+}
+
+async function toggleSchedule(id, done) {
+  await fetch(`/schedule/${id}`, {
+    method: 'PATCH',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ done }),
+  });
+  loadSchedule();
+}
+
+async function deleteSchedule(id) {
+  await fetch(`/schedule/${id}`, { method: 'DELETE', headers: authHeader() });
+  loadSchedule();
+}
+
+/* 탭 전환 시 자동 로드 (switchTab 위쪽에서 정의된 거 wrap) */
+window.addEventListener('DOMContentLoaded', () => {
+  const orig = window.switchTab;
+  window.switchTab = function(name, btn) {
+    orig(name, btn);
+    if (name === 'notes')    loadNotes();
+    if (name === 'schedule') {
+      const d = document.getElementById('sched-date');
+      if (d && !d.value) d.value = new Date().toISOString().slice(0, 10);
+      loadSchedule();
+    }
+  };
+});
+
 /* ── Exam: 정답 토글 카드 ── */
 function escapeHtml(s) {
   return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -484,6 +685,26 @@ function parseExam(text) {
   return cards;
 }
 
+function parseChoices(choicesText) {
+  if (!choicesText) return [];
+  const re = /([①②③④⑤])\s*([^①②③④⑤]+)/g;
+  const arr = [];
+  let m;
+  while ((m = re.exec(choicesText)) !== null) {
+    arr.push({ num: '①②③④⑤'.indexOf(m[1]) + 1, text: m[2].trim() });
+  }
+  return arr;
+}
+
+function parseAnswerNum(answer) {
+  if (!answer) return null;
+  const m = answer.match(/정답[:\s]*([①②③④⑤])/) || answer.match(/정답[:\s]*([1-5])/);
+  if (!m) return null;
+  const c = m[1];
+  const idx = '①②③④⑤'.indexOf(c);
+  return idx >= 0 ? idx + 1 : parseInt(c, 10);
+}
+
 function renderExamCards() {
   const pre = document.getElementById('tx-exam');
   const raw = pre.textContent;
@@ -493,15 +714,86 @@ function renderExamCards() {
   pre.classList.add('hidden');
   const wrap = document.getElementById('exam-cards');
   wrap.classList.remove('hidden');
-  wrap.innerHTML = cards.map(c => `
-    <div class="border border-slate-200 rounded-lg p-3 bg-slate-50/60">
-      <div class="text-[10px] text-indigo-500 font-semibold mb-1">${c.type} ${c.num}번</div>
-      <div class="text-xs whitespace-pre-wrap text-slate-700">${escapeHtml(c.question)}</div>
-      ${c.choices ? `<div class="text-xs whitespace-pre-wrap text-slate-600 mt-1.5">${escapeHtml(c.choices)}</div>` : ''}
-      <button onclick="toggleAns(this)" class="text-[10px] mt-2 px-2 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200 transition">정답 보기</button>
-      <div class="hidden mt-2 p-2 bg-white border border-indigo-200 rounded text-xs text-slate-700 whitespace-pre-wrap">${escapeHtml(c.answer || '(정답 정보 없음)')}</div>
-    </div>
-  `).join('');
+
+  let cur = 0;
+  let stats = { correct: 0, wrong: 0 };
+
+  function paint() {
+    if (cur >= cards.length) {
+      wrap.innerHTML = `
+        <div class="text-center py-12 px-4">
+          <div class="text-4xl mb-3">🎉</div>
+          <p class="text-sm font-semibold text-slate-700 mb-1">모든 문제 완료</p>
+          <p class="text-xs text-slate-500">정답 ${stats.correct} · 오답 ${stats.wrong} · 총 ${cards.length}문제</p>
+          <button onclick="renderExamCards()" class="mt-4 px-3 py-1.5 bg-indigo-500 text-white rounded text-xs hover:bg-indigo-600">다시 풀기</button>
+        </div>`;
+      return;
+    }
+    const c       = cards[cur];
+    const isMC    = c.type === '객관식';
+    const choices = isMC ? parseChoices(c.choices) : [];
+    const correct = isMC ? parseAnswerNum(c.answer) : null;
+
+    const choicesHTML = (isMC && choices.length) ? `
+      <div class="space-y-1.5 mt-3 ex-choices">
+        ${choices.map(ch => `
+          <button class="ex-choice w-full text-left px-3 py-2 border border-slate-200 rounded text-xs hover:bg-indigo-50 hover:border-indigo-300 transition" data-num="${ch.num}">
+            <span class="font-semibold text-indigo-500 mr-1.5">${'①②③④⑤'[ch.num - 1]}</span>${escapeHtml(ch.text)}
+          </button>
+        `).join('')}
+      </div>` : '';
+
+    const saToggle = !isMC ? `<button onclick="toggleAns(this)" class="text-[10px] mt-3 px-2 py-1 bg-indigo-100 text-indigo-600 rounded">정답 보기</button>` : '';
+
+    wrap.innerHTML = `
+      <div class="ex-card border border-slate-200 rounded-lg p-3.5 bg-white">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-[10px] text-indigo-500 font-semibold">${c.type} ${c.num}번</span>
+          <span class="text-[10px] text-slate-400">${cur + 1} / ${cards.length}</span>
+        </div>
+        <div class="text-xs whitespace-pre-wrap text-slate-800 leading-relaxed">${escapeHtml(c.question)}</div>
+        ${choicesHTML}
+        ${saToggle}
+        <div class="ex-ans hidden mt-3 p-2.5 bg-indigo-50/60 border border-indigo-100 rounded text-xs text-slate-700 whitespace-pre-wrap">${escapeHtml(c.answer || '(정답 정보 없음)')}</div>
+        <button class="ex-next hidden mt-3 w-full px-3 py-2 bg-indigo-500 text-white rounded text-xs font-medium hover:bg-indigo-600">다음 문제 →</button>
+      </div>`;
+
+    // 객관식 보기 클릭 → 즉시 채점
+    if (isMC && choices.length) {
+      wrap.querySelectorAll('.ex-choice').forEach(btn => {
+        btn.onclick = () => {
+          const picked = parseInt(btn.dataset.num, 10);
+          wrap.querySelectorAll('.ex-choice').forEach((b, i) => {
+            b.disabled = true;
+            b.classList.remove('hover:bg-indigo-50', 'hover:border-indigo-300');
+            const n = parseInt(b.dataset.num, 10);
+            if (n === correct) b.classList.add('bg-green-50', 'border-green-400', 'text-green-700');
+            else if (n === picked) b.classList.add('bg-red-50', 'border-red-400', 'text-red-700');
+            else b.classList.add('opacity-60');
+          });
+          if (picked === correct) stats.correct++; else stats.wrong++;
+          wrap.querySelector('.ex-ans').classList.remove('hidden');
+          wrap.querySelector('.ex-next').classList.remove('hidden');
+        };
+      });
+    }
+
+    // 주관식: 정답 토글 후 "다음" 버튼 보이기
+    const ansBox = wrap.querySelector('.ex-ans');
+    if (!isMC && ansBox) {
+      const obs = new MutationObserver(() => {
+        if (!ansBox.classList.contains('hidden')) {
+          wrap.querySelector('.ex-next').classList.remove('hidden');
+        }
+      });
+      obs.observe(ansBox, { attributes: true });
+    }
+
+    const nextBtn = wrap.querySelector('.ex-next');
+    if (nextBtn) nextBtn.onclick = () => { cur++; paint(); };
+  }
+
+  paint();
 }
 
 /* ── Video (SSE 진행 표시 + 별도 다운로드) ── */
