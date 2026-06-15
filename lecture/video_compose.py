@@ -118,7 +118,8 @@ def _video_concat(slides: list[dict], work: str) -> str:
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-tune", "stillimage",
-            "-profile:v", "high",
+            "-profile:v", "baseline",       # WMP 호환성 최대
+            "-level", "3.1",
             out,
         ],
         step="video_concat",

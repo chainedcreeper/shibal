@@ -396,7 +396,12 @@ async def get_video(user=Depends(get_user_from_query)):
     path = _video_path(sid)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="인강 영상이 아직 생성되지 않음")
-    return FileResponse(path, media_type="video/mp4", filename="lecture_video.mp4")
+    # 한국어 파일명 — 학생이 다운로드 받을 때 보이는 이름
+    from rag import get_meta
+    meta = get_meta(sid)
+    src  = (meta.get("filename") or "강의자료").rsplit(".", 1)[0]
+    download_name = f"요약본_{src}.mp4"
+    return FileResponse(path, media_type="video/mp4", filename=download_name)
 
 
 # ── QA 데이터셋 생성 ───────────────────────────────
