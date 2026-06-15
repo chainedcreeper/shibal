@@ -1068,15 +1068,15 @@ function startVideoPolling() {
 }
 
 async function loadVideoBlob(url) {
-  try {
-    const r = await fetch(url + '?token=' + encodeURIComponent(authToken || ''));
-    if (!r.ok) throw new Error();
-    const blob = await r.blob();
-    hide('ld-video'); hide('ph-video'); show('ct-video');
-    document.getElementById('videoEl').src = URL.createObjectURL(blob);
-  } catch {
-    hide('ld-video'); show('ph-video');
-  }
+  // blob 캐시 잔재 문제 회피 — video 태그에 URL 직접 박고 강제 reload
+  const sep      = url.includes('?') ? '&' : '?';
+  const finalUrl = url + sep + 'token=' + encodeURIComponent(authToken || '');
+  const videoEl  = document.getElementById('videoEl');
+  // 옛 blob URL 있으면 revoke
+  if (videoEl.src && videoEl.src.startsWith('blob:')) URL.revokeObjectURL(videoEl.src);
+  hide('ld-video'); hide('ph-video'); show('ct-video');
+  videoEl.src = finalUrl;
+  try { videoEl.load(); } catch {}
 }
 
 async function syncVideoOnEnter() {
