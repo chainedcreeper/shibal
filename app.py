@@ -14,6 +14,7 @@ import json
 import os
 import queue
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import uvicorn
@@ -429,6 +430,81 @@ async def get_video(user=Depends(get_user_from_query)):
     src  = (meta.get("filename") or "강의자료").rsplit(".", 1)[0]
     download_name = f"요약본_{src}.mp4"
     return FileResponse(path, media_type="video/mp4", filename=download_name)
+
+
+# ── 영상 생성 폴링 방식 (cloudflared SSE buffering 우회) ───
+
+_video_jobs: dict[str, dict] = {}   # sid → {stage, current, total, msg, done, error, url}
+_video_lock = threading.RLock()
+
+
+@app.post("/video/generate")
+async def start_video_generation(user=Depends(get_current_user)):
+    sid = user["student_id"]
+    if not has_state(sid):
+        raise HTTPException(status_code=400, detail="문서 업로드 필요")
+
+    with _video_lock:
+        existing = _video_jobs.get(sid)
+        if existing and not existing.get("done"):
+            return {"status": "already_running"}
+        _video_jobs[sid] = {
+            "stage":   "start",
+            "current": 0, "total": 1,
+            "msg":     "준비 중",
+            "done":    False,
+            "error":   None,
+            "url":     None,
+        }
+
+    def emit(stage, cur, tot, msg):
+        with _video_lock:
+            j = _video_jobs.get(sid)
+            if j:
+                j["stage"]   = stage
+                j["current"] = cur
+                j["total"]   = tot
+                j["msg"]     = msg
+
+    def worker():
+        try:
+            level_info = get_student_level(sid)
+            context    = _full_context(sid)
+            out_path   = _video_path(sid)
+            generate_lecture(context, level_info, out_path, on_progress=emit)
+            with _video_lock:
+                j = _video_jobs.get(sid, {})
+                j["done"]  = True
+                j["url"]   = "/video"
+                j["stage"] = "done"
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            with _video_lock:
+                j = _video_jobs.get(sid, {})
+                j["done"]  = True
+                j["error"] = str(e)
+
+    executor.submit(worker)
+    return {"status": "started"}
+
+
+@app.get("/video/status")
+async def get_video_status(user=Depends(get_current_user)):
+    sid = user["student_id"]
+    with _video_lock:
+        job = _video_jobs.get(sid)
+    if job:
+        return job
+    # 메모리에 job 없지만 mp4 파일은 있을 수 있음 (서버 재시작 후)
+    if os.path.exists(_video_path(sid)):
+        return {
+            "stage": "ready", "current": 1, "total": 1, "msg": "",
+            "done": True, "error": None, "url": "/video",
+        }
+    return {
+        "stage": "idle", "current": 0, "total": 1, "msg": "",
+        "done": False, "error": None, "url": None,
+    }
 
 
 # ── QA 데이터셋 생성 ───────────────────────────────

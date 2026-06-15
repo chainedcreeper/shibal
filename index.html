@@ -120,20 +120,7 @@
       🎬 강의 영상 생성
     </button>
 
-    <button id="qaBtn" onclick="generateQA()" disabled
-            class="w-full bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 text-xs font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1">
-      🗂️ Q&A 데이터 생성
-    </button>
-
-    <div id="qaProgressBox" class="hidden space-y-1 pt-1">
-      <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Q&A 생성 진행</p>
-      <div id="qaProgressText" class="text-[11px] text-slate-500">준비 중...</div>
-      <div class="w-full bg-slate-100 rounded-full h-1.5">
-        <div id="qaProgressBar" class="bg-indigo-500 h-1.5 rounded-full transition-all" style="width:0%"></div>
-      </div>
-    </div>
-
-    <!-- Progress -->
+<!-- Progress -->
     <div id="progressBox" class="hidden space-y-2 pt-1">
       <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">진행 상황</p>
       <div id="pg-summary"  class="flex items-center gap-1.5"><div class="step-dot w-3 h-3 rounded-full border-2 border-slate-200 shrink-0"></div><span class="text-[11px] text-slate-400">강의 요약</span></div>
@@ -421,7 +408,6 @@ async function upload(file) {
     setText('upMsg', '완료 · 분석 시작');
     setBtn('analyzeBtn', true);
     setBtn('videoBtn', true);
-    setBtn('qaBtn', true);
     document.getElementById('chatDot').className = 'ml-auto w-2 h-2 rounded-full bg-green-400';
     // 업로드 끝나면 자동 분석 시작 (요약/개념/시험)
     startAnalysis();
@@ -633,6 +619,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (d && !d.value) d.value = new Date().toISOString().slice(0, 10);
       loadSchedule();
     }
+    if (name === 'video')    syncVideoOnEnter();
   };
 });
 
@@ -705,6 +692,9 @@ function parseAnswerNum(answer) {
   return idx >= 0 ? idx + 1 : parseInt(c, 10);
 }
 
+/* 시험 인터랙티브 — 한 문제씩 + 이전/다음 + 모드 토글 + 채점 */
+let examState = null;
+
 function renderExamCards() {
   const pre = document.getElementById('tx-exam');
   const raw = pre.textContent;
@@ -715,85 +705,172 @@ function renderExamCards() {
   const wrap = document.getElementById('exam-cards');
   wrap.classList.remove('hidden');
 
-  let cur = 0;
-  let stats = { correct: 0, wrong: 0 };
+  examState = {
+    cards,
+    picks:  new Array(cards.length).fill(null),
+    cur:    0,
+    mode:   'instant',   // 'instant' (즉시 피드백) | 'batch' (다 풀고 채점)
+    scored: false,       // batch 모드에서 채점 완료 표시
+    saReveal: new Array(cards.length).fill(false),  // 주관식 정답 표시 여부
+  };
+  paintExam();
+}
 
-  function paint() {
-    if (cur >= cards.length) {
-      wrap.innerHTML = `
-        <div class="text-center py-12 px-4">
-          <div class="text-4xl mb-3">🎉</div>
-          <p class="text-sm font-semibold text-slate-700 mb-1">모든 문제 완료</p>
-          <p class="text-xs text-slate-500">정답 ${stats.correct} · 오답 ${stats.wrong} · 총 ${cards.length}문제</p>
-          <button onclick="renderExamCards()" class="mt-4 px-3 py-1.5 bg-indigo-500 text-white rounded text-xs hover:bg-indigo-600">다시 풀기</button>
-        </div>`;
-      return;
-    }
-    const c       = cards[cur];
-    const isMC    = c.type === '객관식';
-    const choices = isMC ? parseChoices(c.choices) : [];
-    const correct = isMC ? parseAnswerNum(c.answer) : null;
+function paintExam() {
+  if (!examState) return;
+  const wrap = document.getElementById('exam-cards');
+  const { cards, picks, cur, mode, scored, saReveal } = examState;
 
-    const choicesHTML = (isMC && choices.length) ? `
-      <div class="space-y-1.5 mt-3 ex-choices">
-        ${choices.map(ch => `
-          <button class="ex-choice w-full text-left px-3 py-2 border border-slate-200 rounded text-xs hover:bg-indigo-50 hover:border-indigo-300 transition" data-num="${ch.num}">
-            <span class="font-semibold text-indigo-500 mr-1.5">${'①②③④⑤'[ch.num - 1]}</span>${escapeHtml(ch.text)}
-          </button>
-        `).join('')}
-      </div>` : '';
-
-    const saToggle = !isMC ? `<button onclick="toggleAns(this)" class="text-[10px] mt-3 px-2 py-1 bg-indigo-100 text-indigo-600 rounded">정답 보기</button>` : '';
-
+  // 결과 화면
+  if (cur === -1) {
+    let correct = 0, wrong = 0, blank = 0;
+    cards.forEach((c, i) => {
+      if (c.type !== '객관식') return;
+      const ans = parseAnswerNum(c.answer);
+      if (picks[i] === null) blank++;
+      else if (picks[i] === ans) correct++;
+      else wrong++;
+    });
+    const mcTotal = cards.filter(c => c.type === '객관식').length;
     wrap.innerHTML = `
-      <div class="ex-card border border-slate-200 rounded-lg p-3.5 bg-white">
-        <div class="flex justify-between items-center mb-2">
-          <span class="text-[10px] text-indigo-500 font-semibold">${c.type} ${c.num}번</span>
-          <span class="text-[10px] text-slate-400">${cur + 1} / ${cards.length}</span>
+      <div class="text-center py-10 px-4">
+        <div class="text-5xl mb-3">🎉</div>
+        <p class="text-base font-semibold text-slate-800 mb-1">채점 결과</p>
+        <p class="text-xs text-slate-500 mb-5">객관식 ${mcTotal}문제 중 정답 ${correct} · 오답 ${wrong}${blank ? ` · 미답 ${blank}` : ''}</p>
+        <div class="flex gap-2 justify-center">
+          <button onclick="reviewExam()" class="px-3 py-2 bg-white border border-slate-300 rounded text-xs hover:bg-slate-50">문제 다시 보기</button>
+          <button onclick="restartExam()" class="px-4 py-2 bg-indigo-500 text-white rounded text-xs font-medium hover:bg-indigo-600">다시 풀기</button>
         </div>
-        <div class="text-xs whitespace-pre-wrap text-slate-800 leading-relaxed">${escapeHtml(c.question)}</div>
-        ${choicesHTML}
-        ${saToggle}
-        <div class="ex-ans hidden mt-3 p-2.5 bg-indigo-50/60 border border-indigo-100 rounded text-xs text-slate-700 whitespace-pre-wrap">${escapeHtml(c.answer || '(정답 정보 없음)')}</div>
-        <button class="ex-next hidden mt-3 w-full px-3 py-2 bg-indigo-500 text-white rounded text-xs font-medium hover:bg-indigo-600">다음 문제 →</button>
       </div>`;
-
-    // 객관식 보기 클릭 → 즉시 채점
-    if (isMC && choices.length) {
-      wrap.querySelectorAll('.ex-choice').forEach(btn => {
-        btn.onclick = () => {
-          const picked = parseInt(btn.dataset.num, 10);
-          wrap.querySelectorAll('.ex-choice').forEach((b, i) => {
-            b.disabled = true;
-            b.classList.remove('hover:bg-indigo-50', 'hover:border-indigo-300');
-            const n = parseInt(b.dataset.num, 10);
-            if (n === correct) b.classList.add('bg-green-50', 'border-green-400', 'text-green-700');
-            else if (n === picked) b.classList.add('bg-red-50', 'border-red-400', 'text-red-700');
-            else b.classList.add('opacity-60');
-          });
-          if (picked === correct) stats.correct++; else stats.wrong++;
-          wrap.querySelector('.ex-ans').classList.remove('hidden');
-          wrap.querySelector('.ex-next').classList.remove('hidden');
-        };
-      });
-    }
-
-    // 주관식: 정답 토글 후 "다음" 버튼 보이기
-    const ansBox = wrap.querySelector('.ex-ans');
-    if (!isMC && ansBox) {
-      const obs = new MutationObserver(() => {
-        if (!ansBox.classList.contains('hidden')) {
-          wrap.querySelector('.ex-next').classList.remove('hidden');
-        }
-      });
-      obs.observe(ansBox, { attributes: true });
-    }
-
-    const nextBtn = wrap.querySelector('.ex-next');
-    if (nextBtn) nextBtn.onclick = () => { cur++; paint(); };
+    return;
   }
 
-  paint();
+  const c       = cards[cur];
+  const isMC    = c.type === '객관식';
+  const choices = isMC ? parseChoices(c.choices) : [];
+  const correct = isMC ? parseAnswerNum(c.answer) : null;
+  const picked  = picks[cur];
+
+  // 정답 공개 조건
+  const showAnswerMC = isMC && (scored || (mode === 'instant' && picked !== null));
+  const showAnswerSA = !isMC && (scored || saReveal[cur]);
+  const showAnswer   = showAnswerMC || showAnswerSA;
+
+  const modeToggle = `
+    <div class="flex items-center gap-2 mb-3 text-[10px]">
+      <span class="text-slate-500 mr-1">채점 방식</span>
+      <button onclick="setExamMode('instant')"
+              class="px-2.5 py-1 rounded ${mode === 'instant' ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">즉시 피드백</button>
+      <button onclick="setExamMode('batch')"
+              class="px-2.5 py-1 rounded ${mode === 'batch' ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">다 풀고 채점</button>
+    </div>`;
+
+  const choicesHTML = (isMC && choices.length) ? `
+    <div class="space-y-2 mt-4 ex-choices">
+      ${choices.map(ch => {
+        let cls = 'border-slate-200 hover:bg-indigo-50 hover:border-indigo-300';
+        if (showAnswerMC) {
+          if (ch.num === correct)        cls = 'border-green-400 bg-green-50 text-green-700';
+          else if (ch.num === picked)    cls = 'border-red-400 bg-red-50 text-red-700';
+          else                           cls = 'border-slate-200 opacity-50';
+        } else if (ch.num === picked) {
+          cls = 'border-indigo-400 bg-indigo-50 text-indigo-700';
+        }
+        return `
+          <button onclick="pickChoice(${ch.num})" ${showAnswerMC ? 'disabled' : ''}
+                  class="w-full text-left px-3 py-2.5 border rounded text-xs transition ${cls}">
+            <span class="font-semibold mr-2">${'①②③④⑤'[ch.num - 1]}</span>${escapeHtml(ch.text)}
+          </button>`;
+      }).join('')}
+    </div>` : '';
+
+  const saButton = (!isMC && !showAnswerSA) ? `
+    <button onclick="revealSaAnswer()" class="text-[10px] mt-3 px-2.5 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200">정답 보기</button>
+  ` : '';
+
+  const answerBox = (showAnswer && c.answer) ? `
+    <div class="mt-3 p-3 bg-indigo-50/60 border border-indigo-100 rounded text-xs text-slate-700 whitespace-pre-wrap">${escapeHtml(c.answer)}</div>
+  ` : '';
+
+  // 진행 표시 (각 문제의 답한 상태)
+  const dots = cards.map((cc, i) => {
+    let cls = 'bg-slate-200';
+    if (i === cur) cls = 'bg-indigo-500 w-4';
+    else if (picks[i] !== null) cls = 'bg-indigo-300';
+    return `<button onclick="goExam(${i})" class="h-1.5 ${cls} rounded-full transition-all" style="width:${i === cur ? '16px' : '8px'}" title="${i + 1}번"></button>`;
+  }).join('');
+
+  // 네비
+  const allAnswered = picks.every((p, i) => cards[i].type !== '객관식' || p !== null);
+  const isLast = cur === cards.length - 1;
+  const showFinish = mode === 'batch' && !scored && allAnswered;
+
+  const nav = `
+    <div class="flex items-center gap-2 mt-5">
+      <button onclick="goExam(${cur - 1})" ${cur === 0 ? 'disabled' : ''}
+              class="px-3.5 py-2 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed">← 이전</button>
+      <div class="flex-1 flex items-center justify-center gap-1.5 px-2">${dots}</div>
+      ${showFinish ? `
+        <button onclick="finishExam()" class="px-4 py-2 bg-indigo-500 text-white rounded text-xs font-medium hover:bg-indigo-600">채점하기</button>
+      ` : `
+        <button onclick="goExam(${cur + 1})" ${isLast ? 'disabled' : ''}
+                class="px-3.5 py-2 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed">다음 →</button>
+      `}
+    </div>`;
+
+  wrap.innerHTML = `
+    ${modeToggle}
+    <div class="border border-slate-200 rounded-lg p-4 bg-white">
+      <div class="flex justify-between items-center mb-2.5">
+        <span class="text-[10px] text-indigo-500 font-semibold">${c.type} ${c.num}번</span>
+        <span class="text-[10px] text-slate-400">${cur + 1} / ${cards.length}</span>
+      </div>
+      <div class="text-sm whitespace-pre-wrap text-slate-800 leading-relaxed">${escapeHtml(c.question)}</div>
+      ${choicesHTML}
+      ${saButton}
+      ${answerBox}
+    </div>
+    ${nav}`;
+}
+
+function pickChoice(num) {
+  examState.picks[examState.cur] = num;
+  paintExam();
+}
+
+function setExamMode(mode) {
+  examState.mode = mode;
+  paintExam();
+}
+
+function revealSaAnswer() {
+  examState.saReveal[examState.cur] = true;
+  paintExam();
+}
+
+function goExam(idx) {
+  if (idx < 0 || idx >= examState.cards.length) return;
+  examState.cur = idx;
+  paintExam();
+}
+
+function finishExam() {
+  examState.scored = true;
+  examState.cur = -1;
+  paintExam();
+}
+
+function reviewExam() {
+  examState.cur = 0;
+  paintExam();
+}
+
+function restartExam() {
+  examState.picks    = new Array(examState.cards.length).fill(null);
+  examState.cur      = 0;
+  examState.scored   = false;
+  examState.saReveal = new Array(examState.cards.length).fill(false);
+  paintExam();
 }
 
 /* ── Video (SSE 진행 표시 + 별도 다운로드) ── */
@@ -830,75 +907,80 @@ function _setVideoProgress(stage, current, total, msg) {
   if (barEl) barEl.style.width = Math.max(0, Math.min(100, pct)) + '%';
 }
 
+/* 영상 — POST /video/generate 로 백그라운드 시작 → 2초마다 GET /video/status 폴링.
+   cloudflared SSE buffering 우회 (작은 JSON GET 은 영향 없음). */
+let videoPollInterval = null;
+
 async function generateVideo() {
   setBtn('videoBtn', false);
   switchTab('video', document.querySelectorAll('.tab-btn')[3]);
   hide('ph-video'); hide('ct-video'); show('ld-video');
   _setVideoProgress('start', 0, 1, '');
 
-  return new Promise(resolve => {
-    const es = new EventSource('/generate-video?token=' + encodeURIComponent(authToken || ''));
-    es.onmessage = async e => {
-      const d = JSON.parse(e.data);
-      if (d.error) {
-        es.close();
-        hide('ld-video'); show('ph-video');
-        setBtn('videoBtn', true);
-        resolve();
-        return;
-      }
-      if (d.done && d.url) {
-        es.close();
-        try {
-          const r = await fetch(d.url + '?token=' + encodeURIComponent(authToken || ''));
-          if (!r.ok) throw new Error();
-          const blob = await r.blob();
-          hide('ld-video'); show('ct-video');
-          document.getElementById('videoEl').src = URL.createObjectURL(blob);
-        } catch {
-          hide('ld-video'); show('ph-video');
-        }
-        setBtn('videoBtn', true);
-        resolve();
-        return;
-      }
-      _setVideoProgress(d.stage, d.current || 0, d.total || 1, d.msg || '');
-    };
-    es.onerror = () => {
-      es.close();
-      hide('ld-video'); show('ph-video');
-      setBtn('videoBtn', true);
-      resolve();
-    };
-  });
+  try {
+    const r = await fetch('/video/generate', { method: 'POST', headers: authHeader() });
+    if (!r.ok) throw new Error();
+  } catch {
+    hide('ld-video'); show('ph-video');
+    setBtn('videoBtn', true);
+    showToast('영상 생성 시작 실패');
+    return;
+  }
+  startVideoPolling();
 }
 
-/* ── Q&A Generation ── */
-async function generateQA() {
-  setBtn('qaBtn', false);
-  show('qaProgressBox');
-  document.getElementById('qaProgressText').textContent = '시작 중...';
-  document.getElementById('qaProgressBar').style.width = '0%';
-
-  const es = new EventSource('/generate-qa?token=' + encodeURIComponent(authToken || ''));
-  es.onmessage = e => {
-    const d = JSON.parse(e.data);
-    if (d.done) {
-      es.close();
-      setBtn('qaBtn', true);
-      document.getElementById('qaProgressText').textContent = `완료: ${d.total}개 생성 → ${d.path}`;
-      document.getElementById('qaProgressBar').style.width = '100%';
-      return;
+function startVideoPolling() {
+  if (videoPollInterval) clearInterval(videoPollInterval);
+  videoPollInterval = setInterval(async () => {
+    try {
+      const r = await fetch('/video/status', { headers: authHeader() });
+      if (!r.ok) return;
+      const s = await r.json();
+      if (s.error) {
+        clearInterval(videoPollInterval); videoPollInterval = null;
+        hide('ld-video'); show('ph-video');
+        setBtn('videoBtn', true);
+        showToast('영상 생성 실패: ' + s.error);
+        return;
+      }
+      _setVideoProgress(s.stage, s.current || 0, s.total || 1, s.msg || '');
+      if (s.done && s.url) {
+        clearInterval(videoPollInterval); videoPollInterval = null;
+        await loadVideoBlob(s.url);
+        setBtn('videoBtn', true);
+      }
+    } catch {
+      // 일시적 네트워크 오류는 다음 poll 에서 재시도
     }
-    const pct = Math.round((d.current / d.total) * 100);
-    document.getElementById('qaProgressText').textContent = `${d.current} / ${d.total} 청크 처리 중...`;
-    document.getElementById('qaProgressBar').style.width = pct + '%';
-  };
-  es.onerror = () => {
-    es.close();
-    setBtn('qaBtn', true);
-    document.getElementById('qaProgressText').textContent = '오류 발생';
-  };
+  }, 2000);
+}
+
+async function loadVideoBlob(url) {
+  try {
+    const r = await fetch(url + '?token=' + encodeURIComponent(authToken || ''));
+    if (!r.ok) throw new Error();
+    const blob = await r.blob();
+    hide('ld-video'); hide('ph-video'); show('ct-video');
+    document.getElementById('videoEl').src = URL.createObjectURL(blob);
+  } catch {
+    hide('ld-video'); show('ph-video');
+  }
+}
+
+async function syncVideoOnEnter() {
+  if (!authToken) return;
+  try {
+    const r = await fetch('/video/status', { headers: authHeader() });
+    if (!r.ok) return;
+    const s = await r.json();
+    if (s.done && s.url) {
+      await loadVideoBlob(s.url);
+    } else if (s.stage && s.stage !== 'idle' && !s.done) {
+      hide('ph-video'); hide('ct-video'); show('ld-video');
+      _setVideoProgress(s.stage, s.current || 0, s.total || 1, s.msg || '');
+      startVideoPolling();
+    }
+  } catch {}
 }
 
 /* ── Chat ── */
