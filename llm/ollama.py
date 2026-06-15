@@ -44,11 +44,11 @@ def _call_ollama(context, question, level_info=None, stream=False):
             "stream":   stream,
             "think":    False,
             "options": {
-                "num_predict": 8192,   # 긴 JSON 응답도 잘리지 않게
-                "num_ctx":     8192,
+                "num_predict": 16384,   # 영상 스크립트 등 긴 JSON 응답도 잘리지 않게
+                "num_ctx":     16384,   # 강의 자료 + 응답 공간 여유
             },
         },
-        timeout=240,
+        timeout=600,    # 32B 등 느린 모델 대비
         stream=stream,
     )
     resp.raise_for_status()

@@ -51,43 +51,76 @@ SCRIPT_PROMPT = """\
 ]
 """
 
-_FENCE_RE = re.compile(r"```(?:json)?\s*|\s*```", re.IGNORECASE)
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
-_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
+_FENCE_RE      = re.compile(r"```(?:json)?\s*|\s*```", re.IGNORECASE)
+_THINK_RE      = re.compile(r"<think>.*?</think>", re.DOTALL)
+_THINK_OPEN_RE = re.compile(r"<think>.*?(?=\[|\{|$)", re.DOTALL)  # 닫히지 않은 think
+_ARRAY_RE      = re.compile(r"\[.*\]", re.DOTALL)
+_OBJECT_RE     = re.compile(r"\{[^{}]*?\}", re.DOTALL)  # 단일 객체 추출 fallback
 
 _REQUIRED = ("title", "bullets", "narration")  # headline 은 optional 폴백 가능
 
 
 def _extract_json_array(raw: str) -> list[dict]:
+    # 1단계 — 정상 닫힌 think 제거
     text = _THINK_RE.sub("", raw)
+    # 2단계 — 닫히지 않은 think 도 제거 (열린 채로 끝났거나 [ { 직전까지)
+    text = _THINK_OPEN_RE.sub("", text)
+    # 3단계 — 코드 펜스 제거
     text = _FENCE_RE.sub("", text)
+
+    # 1차 시도: [ ... ] 배열 찾기
     m = _ARRAY_RE.search(text)
-    if not m:
-        raise ValueError("응답에서 JSON 배열을 찾을 수 없음")
-    raw_json = m.group(0)
+    if m:
+        raw_json = m.group(0)
+        # 1-A: 그대로
+        try:
+            return json.loads(raw_json, strict=False)
+        except json.JSONDecodeError:
+            pass
+        # 1-B: trailing comma 제거
+        try:
+            return json.loads(re.sub(r",(\s*[}\]])", r"\1", raw_json), strict=False)
+        except json.JSONDecodeError:
+            pass
+        # 1-C: 마지막 잘린 객체 제거 후 재시도 — 마지막 완성된 } 까지만
+        last_brace = raw_json.rfind("}")
+        if last_brace > 0:
+            truncated = raw_json[:last_brace + 1] + "]"
+            try:
+                return json.loads(truncated, strict=False)
+            except json.JSONDecodeError:
+                pass
+        # 1-D: json-repair
+        try:
+            from json_repair import repair_json
+            return json.loads(repair_json(raw_json), strict=False)
+        except Exception:
+            pass
 
-    # 시도 1: strict=False (raw \n 허용)
-    try:
-        return json.loads(raw_json, strict=False)
-    except json.JSONDecodeError:
-        pass
+    # 2차 시도: 단일 객체들 모아서 배열로 — `{...} {...}` 같이 나열된 경우
+    objects = []
+    for om in _OBJECT_RE.finditer(text):
+        try:
+            objects.append(json.loads(om.group(0), strict=False))
+        except json.JSONDecodeError:
+            continue
+    if objects:
+        return objects
 
-    # 시도 2: trailing comma 제거
-    fixed = re.sub(r",(\s*[}\]])", r"\1", raw_json)
-    try:
-        return json.loads(fixed, strict=False)
-    except json.JSONDecodeError:
-        pass
-
-    # 시도 3: json-repair (LLM JSON 오류 자동 수정)
+    # 3차 시도: json-repair 전체 텍스트
     try:
         from json_repair import repair_json
-        return json.loads(repair_json(raw_json), strict=False)
+        repaired = repair_json(text)
+        if repaired:
+            result = json.loads(repaired, strict=False)
+            if isinstance(result, list) and result:
+                return result
+            if isinstance(result, dict):
+                return [result]
     except Exception:
         pass
 
-    # 모두 실패 → 원본 에러 다시
-    return json.loads(raw_json, strict=False)
+    raise ValueError(f"응답에서 JSON 배열을 찾을 수 없음 (앞 200자: {text[:200]!r})")
 
 
 def _validate(slides: list[dict]) -> list[dict]:
