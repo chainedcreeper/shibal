@@ -1,4 +1,4 @@
-"""로컬 ollama qwen3:8b 호출. 수준별 시스템 프롬프트 분기."""
+"""Ollama LLM 호출 (기본 모델: qwen3:32b). 수준별 시스템 프롬프트 분기."""
 import os
 import json
 import re
@@ -6,7 +6,7 @@ import re
 import requests
 
 OLLAMA_HOST  = os.getenv("OLLAMA_HOST",  "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:32b")
 
 _LEVEL_GUIDE = {
     "입문": "학생은 이 분야가 처음이다. 전문 용어를 최대한 피하고, 일상적인 비유와 쉬운 예시로 설명해라.",

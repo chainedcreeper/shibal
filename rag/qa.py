@@ -1,16 +1,20 @@
 """강의 자료 → QA 페어 자동 생성 (개인화 학습 데이터)."""
 import json
+import os
 import re
 
 import requests
+
+OLLAMA_HOST  = os.getenv("OLLAMA_HOST",  "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:32b")
 
 _OPTIONS = {"num_predict": 512, "num_ctx": 2048}
 
 
 def _call_llm(prompt: str) -> str:
     resp = requests.post(
-        "http://localhost:11434/api/generate",
-        json={"model": "qwen3:8b", "prompt": prompt, "stream": False, "options": _OPTIONS},
+        f"{OLLAMA_HOST}/api/generate",
+        json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False, "options": _OPTIONS},
     )
     return resp.json()["response"]
 

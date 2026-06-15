@@ -16,7 +16,7 @@ PJ_PORT       = int(os.getenv("PJ_PORT", "7860"))
 
 # ── Ollama 추론 ──
 OLLAMA_HOST   = os.getenv("OLLAMA_HOST",  "http://localhost:11434")
-OLLAMA_MODEL  = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+OLLAMA_MODEL  = os.getenv("OLLAMA_MODEL", "qwen3:32b")
 
 # ── 원격 LLM 라우팅 (학교 GPU 서버 분리) ──
 REMOTE_LLM_URL   = os.getenv("REMOTE_LLM_URL",   "")
