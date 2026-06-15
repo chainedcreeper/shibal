@@ -698,6 +698,8 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     if (name === 'video')    syncVideoOnEnter();
   };
+  // 이미 로그인 상태면 모델 토글 즉시 로드
+  if (authToken) loadModels();
 });
 
 /* ── Exam: 정답 토글 카드 ── */
