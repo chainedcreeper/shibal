@@ -368,7 +368,7 @@ def _safe_name(name: str) -> str:
     return (safe.strip("_.") or "untitled")[:80]
 
 
-def _video_path(student_id: str, source_filename: str = None) -> str | None:
+def _video_path(student_id, source_filename=None):
     """현재 강의자료에 매칭되는 영상 경로.
     source_filename 안 주면 RAG 메타에서 자동 조회. 메타 없으면 None (옛 영상 매칭 차단)."""
     if source_filename is None:
