@@ -413,12 +413,24 @@ async function upload(file) {
     setBtn('analyzeBtn', true);
     setBtn('videoBtn', true);
     document.getElementById('chatDot').className = 'ml-auto w-2 h-2 rounded-full bg-green-400';
+    // 새 자료 들어왔으니 옛 영상 잔재 제거 (blob URL revoke + src 비우기 + placeholder)
+    resetVideoEl();
     // 업로드 끝나면 자동 분석 시작 (요약/개념/시험)
     startAnalysis();
   } catch {
     hide('upSpinner');
     setText('upMsg', '오류 발생');
   }
+}
+
+function resetVideoEl() {
+  const videoEl = document.getElementById('videoEl');
+  if (videoEl) {
+    if (videoEl.src && videoEl.src.startsWith('blob:')) URL.revokeObjectURL(videoEl.src);
+    videoEl.removeAttribute('src');
+    try { videoEl.load(); } catch {}
+  }
+  hide('ct-video'); hide('ld-video'); show('ph-video');
 }
 
 /* ── Tabs ── */
@@ -1079,6 +1091,9 @@ async function syncVideoOnEnter() {
       hide('ph-video'); hide('ct-video'); show('ld-video');
       _setVideoProgress(s.stage, s.current || 0, s.total || 1, s.msg || '');
       startVideoPolling();
+    } else {
+      // idle — 옛 영상 잔재 비움
+      resetVideoEl();
     }
   } catch {}
 }

@@ -368,15 +368,15 @@ def _safe_name(name: str) -> str:
     return (safe.strip("_.") or "untitled")[:80]
 
 
-def _video_path(student_id: str, source_filename: str = None) -> str:
+def _video_path(student_id: str, source_filename: str = None) -> str | None:
     """현재 강의자료에 매칭되는 영상 경로.
-    source_filename 안 주면 RAG 메타에서 자동 조회. 메타도 없으면 sid-only fallback."""
+    source_filename 안 주면 RAG 메타에서 자동 조회. 메타 없으면 None (옛 영상 매칭 차단)."""
     if source_filename is None:
         meta = get_meta(student_id) or {}
         source_filename = meta.get("filename")
-    if source_filename:
-        return os.path.join(BASE_DIR, f"lecture_{student_id}_{_safe_name(source_filename)}.mp4")
-    return os.path.join(BASE_DIR, f"lecture_{student_id}.mp4")
+    if not source_filename:
+        return None
+    return os.path.join(BASE_DIR, f"lecture_{student_id}_{_safe_name(source_filename)}.mp4")
 
 
 @app.get("/generate-video")
@@ -403,8 +403,11 @@ async def generate_video(user=Depends(get_user_from_query)):
                 level_info = get_student_level(sid)
                 context    = _full_context(sid)
                 out_path   = _video_path(sid)
+                if not out_path:
+                    raise RuntimeError("강의자료 메타 없음")
                 generate_lecture(context, level_info, out_path, on_progress=emit)
-                event_queue.put({"done": True, "url": "/video"})
+                bust = int(os.path.getmtime(out_path)) if os.path.exists(out_path) else 0
+                event_queue.put({"done": True, "url": f"/video?t={bust}"})
             except Exception as e:
                 event_queue.put({"error": str(e)})
             finally:
@@ -439,15 +442,16 @@ async def generate_video(user=Depends(get_user_from_query)):
 @app.get("/video")
 async def get_video(user=Depends(get_user_from_query)):
     sid  = user["student_id"]
+    if not has_state(sid):
+        raise HTTPException(status_code=404, detail="문서 업로드 필요")
     path = _video_path(sid)
-    if not os.path.exists(path):
+    if not path or not os.path.exists(path):
         raise HTTPException(status_code=404, detail="인강 영상이 아직 생성되지 않음")
-    # 한국어 파일명 — 학생이 다운로드 받을 때 보이는 이름
-    from rag import get_meta
-    meta = get_meta(sid)
+    meta = get_meta(sid) or {}
     src  = (meta.get("filename") or "강의자료").rsplit(".", 1)[0]
     download_name = f"요약본_{src}.mp4"
-    return FileResponse(path, media_type="video/mp4", filename=download_name)
+    headers = {"Cache-Control": "no-store, no-cache, must-revalidate"}
+    return FileResponse(path, media_type="video/mp4", filename=download_name, headers=headers)
 
 
 # ── 영상 생성 폴링 방식 (cloudflared SSE buffering 우회) ───
@@ -489,11 +493,14 @@ async def start_video_generation(user=Depends(get_current_user)):
             level_info = get_student_level(sid)
             context    = _full_context(sid)
             out_path   = _video_path(sid)
+            if not out_path:
+                raise RuntimeError("강의자료 메타 없음")
             generate_lecture(context, level_info, out_path, on_progress=emit)
+            bust = int(os.path.getmtime(out_path)) if os.path.exists(out_path) else 0
             with _video_lock:
                 j = _video_jobs.get(sid, {})
                 j["done"]  = True
-                j["url"]   = "/video"
+                j["url"]   = f"/video?t={bust}"
                 j["stage"] = "done"
         except Exception as e:
             import traceback; traceback.print_exc()
@@ -513,11 +520,17 @@ async def get_video_status(user=Depends(get_current_user)):
         job = _video_jobs.get(sid)
     if job:
         return job
-    # 메모리에 job 없지만 mp4 파일은 있을 수 있음 (서버 재시작 후)
-    if os.path.exists(_video_path(sid)):
+    # 메모리에 job 없는 경우 — 현재 강의자료에 매칭되는 영상이 있을 때만 ready
+    if not has_state(sid):
+        return {"stage": "idle", "current": 0, "total": 1, "msg": "",
+                "done": False, "error": None, "url": None}
+    path = _video_path(sid)
+    if path and os.path.exists(path):
+        # 캐시 우회용 timestamp — 같은 url 이라도 매번 새로 받음
+        bust = int(os.path.getmtime(path))
         return {
             "stage": "ready", "current": 1, "total": 1, "msg": "",
-            "done": True, "error": None, "url": "/video",
+            "done": True, "error": None, "url": f"/video?t={bust}",
         }
     return {
         "stage": "idle", "current": 0, "total": 1, "msg": "",
