@@ -125,7 +125,7 @@
         </select>
         <span id="modelDot" class="w-2 h-2 rounded-full bg-slate-300" title="현재 모델"></span>
       </div>
-      <p id="modelHint" class="text-[10px] text-slate-400">환경에 맞춰 자동 선택</p>
+      <p id="modelHint" class="text-[10px] text-slate-400">기본 8B · 어려운 자료엔 32B</p>
     </div>
 
 <!-- Progress -->
@@ -359,6 +359,13 @@ async function doLogin() {
   } catch { errEl.textContent = '서버 오류'; errEl.classList.remove('hidden'); }
 }
 
+function _modelLabel(name) {
+  // 모델별 표시 라벨 (기본/고급 구분)
+  if (name === 'qwen3:8b')  return '⚡ qwen3:8b (기본)';
+  if (name === 'qwen3:32b') return '🔍 qwen3:32b (고급 탐색)';
+  return name;
+}
+
 async function loadModels() {
   try {
     const r = await fetch('/model', { headers: authHeader() });
@@ -369,13 +376,13 @@ async function loadModels() {
     const dot  = document.getElementById('modelDot');
     if (!sel) return;
     if (!d.available || d.available.length === 0) {
-      sel.innerHTML = `<option value="${d.current}">${d.current}</option>`;
+      sel.innerHTML = `<option value="${d.current}">${_modelLabel(d.current)}</option>`;
     } else {
       sel.innerHTML = d.available.map(m =>
-        `<option value="${m}" ${m === d.current ? 'selected' : ''}>${m}</option>`
+        `<option value="${m}" ${m === d.current ? 'selected' : ''}>${_modelLabel(m)}</option>`
       ).join('');
     }
-    if (hint) hint.textContent = `현재 · ${d.current}`;
+    if (hint) hint.textContent = `현재 · ${_modelLabel(d.current)}`;
     if (dot)  dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
   } catch {
     // 무시 — 사이드바 토글은 부가 기능

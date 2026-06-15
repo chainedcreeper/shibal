@@ -70,7 +70,7 @@ def _llm_score(question: str) -> float:
         resp = requests.post(
             f"{os.getenv('OLLAMA_HOST', 'http://localhost:11434')}/api/generate",
             json={
-                "model": os.getenv("OLLAMA_MODEL", "qwen3:32b"),
+                "model": os.getenv("OLLAMA_MODEL", "qwen3:8b"),
                 "prompt": prompt,
                 "stream": False,
                 "options": {"num_predict": 5, "num_ctx": 512},

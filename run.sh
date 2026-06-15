@@ -7,7 +7,7 @@ PJ_DIR="$(cd "$(dirname "$0")" && pwd)"
 HOME_DIR="$HOME"
 OLLAMA_BIN="${OLLAMA_BIN:-$HOME_DIR/ollama/bin/ollama}"
 PORT="${PJ_PORT:-7860}"
-MODEL="${OLLAMA_MODEL:-qwen3:32b}"
+MODEL="${OLLAMA_MODEL:-qwen3:8b}"
 
 echo "==========================================="
 echo "  pj 서버 시작"
