@@ -161,7 +161,7 @@
             <button onclick="saveAsNote(document.getElementById('tx-summary').textContent, 'analyze:summary', 'general')" class="text-[10px] px-2 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200">📌 저장</button>
           </div>
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-            <pre id="tx-summary" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></pre>
+            <pre id="tx-summary" class="text-sm text-slate-800 leading-[1.75] whitespace-pre-wrap"></pre>
           </div>
         </div>
       </div>
@@ -181,7 +181,7 @@
             <button onclick="saveAsNote(document.getElementById('tx-concepts').textContent, 'analyze:concepts', 'important')" class="text-[10px] px-2 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200">📌 저장</button>
           </div>
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-            <pre id="tx-concepts" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></pre>
+            <pre id="tx-concepts" class="text-sm text-slate-800 leading-[1.75] whitespace-pre-wrap"></pre>
           </div>
         </div>
       </div>
@@ -201,7 +201,11 @@
             <button onclick="saveAsNote(document.getElementById('tx-exam').textContent, 'analyze:exam', 'exam')" class="text-[10px] px-2 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200">📌 시험 대비 저장</button>
           </div>
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-            <pre id="tx-exam" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></pre>
+            <div id="exam-parse-warn" class="hidden mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-700 flex items-center justify-between gap-2">
+              <span>⚠️ 시험 문제 파싱 실패 — 원본 텍스트 표시 중. 다시 분석하면 보통 풀림.</span>
+              <button onclick="retryParseExam()" class="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 rounded text-amber-800 font-medium">재시도</button>
+            </div>
+            <pre id="tx-exam" class="text-sm text-slate-800 leading-[1.75] whitespace-pre-wrap"></pre>
             <div id="exam-cards" class="hidden space-y-3"></div>
           </div>
         </div>
@@ -636,56 +640,86 @@ function toggleAns(btn) {
 
 function parseExam(text) {
   const cards = [];
-  const mcStart = text.indexOf('[객관식');
-  const saStart = text.indexOf('[주관식');
+  // 마크다운 강조(**, ##) 둘러싸도 잡히게 라벨만 검색
+  const findLabel = (label) => {
+    const re = new RegExp(`(?:\\*\\*|##\\s*)?\\[?\\s*${label}[^\\]\\n]*\\]?(?:\\*\\*)?`, 'i');
+    const m = text.match(re);
+    return m ? m.index : -1;
+  };
+  const mcStart = findLabel('객관식');
+  const saStart = findLabel('주관식');
 
   const parseSection = (raw, type) => {
     if (!raw) return;
-    const blocks = raw.split(/(?=^\s*\d+\.\s)/m).map(b => b.trim()).filter(Boolean);
+    const blocks = raw.split(/(?=^\s*(?:\*\*)?\d+[\.\)]\s)/m).map(b => b.trim()).filter(Boolean);
     blocks.forEach(b => {
-      const numMatch = b.match(/^(\d+)\.\s*(.+?)(?=\n|$)/);
+      const numMatch = b.match(/^(?:\*\*)?(\d+)[\.\)]\s*(.+?)(?=\n|$)/);
       if (!numMatch) return;
       const num      = numMatch[1];
-      const question = numMatch[2].trim();
+      const question = numMatch[2].replace(/\*\*/g, '').trim();
       let choices = '', answer = '';
-      if (type === '객관식') {
-        const c = b.match(/(①[\s\S]*?)(?=\n*정답:|$)/);
-        if (c) choices = c[1].trim();
-        const a = b.match(/정답:[\s\S]*$/);
-        if (a) answer = a[0].trim();
+      // 보기/정답 라벨 위치를 토대로 분할 (마크다운 강조 허용)
+      const ansRe = /(?:\*\*)?\s*(?:정답|답)\s*(?:\*\*)?\s*[:：]/;
+      const ansIdx = b.search(ansRe);
+      const choiceStart = b.search(/[①②③④⑤]|^\s*(?:\*\*)?[1-5][\.\)]\s/m);
+      const hasChoices = choiceStart >= 0 && (ansIdx < 0 || choiceStart < ansIdx);
+      const isMC = type === '객관식' || (type === 'auto' && hasChoices);
+      const realType = type === 'auto' ? (isMC ? '객관식' : '주관식') : type;
+      if (isMC) {
+        if (hasChoices) {
+          const end = ansIdx >= 0 ? ansIdx : b.length;
+          choices = b.slice(choiceStart, end).trim();
+        }
+        if (ansIdx >= 0) answer = b.slice(ansIdx).trim();
       } else {
-        const a = b.match(/(모범답안:[\s\S]*)$/);
+        const a = b.match(/((?:\*\*)?(?:모범답안|정답)(?:\*\*)?\s*[:：][\s\S]*)$/);
         if (a) answer = a[1].trim();
       }
-      cards.push({ type, num, question, choices, answer });
+      cards.push({ type: realType, num, question, choices, answer });
     });
   };
 
   if (mcStart >= 0 && saStart >= 0) {
-    parseSection(text.slice(mcStart, saStart), '객관식');
-    parseSection(text.slice(saStart),         '주관식');
+    const [first, second] = mcStart < saStart ? [mcStart, saStart] : [saStart, mcStart];
+    const firstType  = mcStart < saStart ? '객관식' : '주관식';
+    const secondType = firstType === '객관식' ? '주관식' : '객관식';
+    parseSection(text.slice(first, second), firstType);
+    parseSection(text.slice(second), secondType);
   } else if (mcStart >= 0) {
     parseSection(text.slice(mcStart), '객관식');
   } else if (saStart >= 0) {
     parseSection(text.slice(saStart), '주관식');
+  } else {
+    // 라벨 통째로 없으면 — 보기 유무로 자동 판별
+    parseSection(text, 'auto');
   }
   return cards;
 }
 
 function parseChoices(choicesText) {
   if (!choicesText) return [];
-  const re = /([①②③④⑤])\s*([^①②③④⑤]+)/g;
   const arr = [];
+  // 1순위: ①②③④⑤
+  const re1 = /([①②③④⑤])\s*([^①②③④⑤\n]+)/g;
   let m;
-  while ((m = re.exec(choicesText)) !== null) {
+  while ((m = re1.exec(choicesText)) !== null) {
     arr.push({ num: '①②③④⑤'.indexOf(m[1]) + 1, text: m[2].trim() });
   }
+  if (arr.length) return arr;
+  // 2순위: 1) 2) 3) 4) 5) — 줄 단위
+  const lines = choicesText.split('\n');
+  lines.forEach(line => {
+    const lm = line.match(/^\s*(?:\*\*)?([1-5])[\.\)]\s*(.+?)(?:\*\*)?\s*$/);
+    if (lm) arr.push({ num: parseInt(lm[1], 10), text: lm[2].trim() });
+  });
   return arr;
 }
 
 function parseAnswerNum(answer) {
   if (!answer) return null;
-  const m = answer.match(/정답[:\s]*([①②③④⑤])/) || answer.match(/정답[:\s]*([1-5])/);
+  // 정답: ② / 정답: 2 / 답: 2 / **정답**: ② 등
+  const m = answer.match(/(?:정답|답)[^\d①②③④⑤]*([①②③④⑤])/)
+        || answer.match(/(?:정답|답)[^\d]*([1-5])\b/);
   if (!m) return null;
   const c = m[1];
   const idx = '①②③④⑤'.indexOf(c);
@@ -696,13 +730,21 @@ function parseAnswerNum(answer) {
 let examState = null;
 
 function renderExamCards() {
-  const pre = document.getElementById('tx-exam');
-  const raw = pre.textContent;
+  const pre  = document.getElementById('tx-exam');
+  const warn = document.getElementById('exam-parse-warn');
+  const wrap = document.getElementById('exam-cards');
+  const raw  = pre.textContent;
   if (!raw.trim()) return;
   const cards = parseExam(raw);
-  if (!cards.length) return;
+  if (!cards.length) {
+    console.warn('[parseExam] 카드 0개 — 원본:', raw.slice(0, 200));
+    warn.classList.remove('hidden');
+    pre.classList.remove('hidden');
+    wrap.classList.add('hidden');
+    return;
+  }
+  warn.classList.add('hidden');
   pre.classList.add('hidden');
-  const wrap = document.getElementById('exam-cards');
   wrap.classList.remove('hidden');
 
   examState = {
@@ -721,7 +763,7 @@ function paintExam() {
   const wrap = document.getElementById('exam-cards');
   const { cards, picks, cur, mode, scored, saReveal } = examState;
 
-  // 결과 화면
+  /* 결과 화면 — 점수 큼지막 + 그래프 + 액션 2개 */
   if (cur === -1) {
     let correct = 0, wrong = 0, blank = 0;
     cards.forEach((c, i) => {
@@ -732,14 +774,22 @@ function paintExam() {
       else wrong++;
     });
     const mcTotal = cards.filter(c => c.type === '객관식').length;
+    const pct = mcTotal ? Math.round((correct / mcTotal) * 100) : 0;
+    const grade = pct >= 90 ? '🏆' : pct >= 70 ? '🎉' : pct >= 50 ? '👍' : '💪';
     wrap.innerHTML = `
-      <div class="text-center py-10 px-4">
-        <div class="text-5xl mb-3">🎉</div>
-        <p class="text-base font-semibold text-slate-800 mb-1">채점 결과</p>
-        <p class="text-xs text-slate-500 mb-5">객관식 ${mcTotal}문제 중 정답 ${correct} · 오답 ${wrong}${blank ? ` · 미답 ${blank}` : ''}</p>
+      <div class="max-w-md mx-auto py-10 px-4 text-center">
+        <div class="text-6xl mb-4">${grade}</div>
+        <p class="text-sm text-slate-500 mb-1">채점 결과</p>
+        <p class="text-5xl font-bold text-indigo-600 mb-1">${pct}<span class="text-2xl text-slate-400">점</span></p>
+        <p class="text-sm text-slate-500 mb-6">${mcTotal}문제 중 <b class="text-emerald-600">${correct}</b> 정답${wrong ? ` · <b class="text-rose-600">${wrong}</b> 오답` : ''}${blank ? ` · <b class="text-slate-500">${blank}</b> 미답` : ''}</p>
+        <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-8">
+          <div class="h-full bg-gradient-to-r from-indigo-400 to-indigo-600 transition-all duration-500" style="width:${pct}%"></div>
+        </div>
         <div class="flex gap-2 justify-center">
-          <button onclick="reviewExam()" class="px-3 py-2 bg-white border border-slate-300 rounded text-xs hover:bg-slate-50">문제 다시 보기</button>
-          <button onclick="restartExam()" class="px-4 py-2 bg-indigo-500 text-white rounded text-xs font-medium hover:bg-indigo-600">다시 풀기</button>
+          <button onclick="reviewExam()"
+                  class="px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">📖 해설 보기</button>
+          <button onclick="restartExam()"
+                  class="px-5 py-2.5 bg-indigo-500 text-white rounded-lg text-sm font-semibold hover:bg-indigo-600 shadow-sm">🔄 다시 풀기</button>
         </div>
       </div>`;
     return;
@@ -748,85 +798,141 @@ function paintExam() {
   const c       = cards[cur];
   const isMC    = c.type === '객관식';
   const choices = isMC ? parseChoices(c.choices) : [];
-  const correct = isMC ? parseAnswerNum(c.answer) : null;
+  const correctNum = isMC ? parseAnswerNum(c.answer) : null;
   const picked  = picks[cur];
 
-  // 정답 공개 조건
+  /* 정답 공개 조건 */
   const showAnswerMC = isMC && (scored || (mode === 'instant' && picked !== null));
   const showAnswerSA = !isMC && (scored || saReveal[cur]);
   const showAnswer   = showAnswerMC || showAnswerSA;
+  const isCorrect    = isMC && picked !== null && picked === correctNum;
 
-  const modeToggle = `
-    <div class="flex items-center gap-2 mb-3 text-[10px]">
-      <span class="text-slate-500 mr-1">채점 방식</span>
-      <button onclick="setExamMode('instant')"
-              class="px-2.5 py-1 rounded ${mode === 'instant' ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">즉시 피드백</button>
-      <button onclick="setExamMode('batch')"
-              class="px-2.5 py-1 rounded ${mode === 'batch' ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">다 풀고 채점</button>
+  /* 상단 진행 바 — Kahoot 스타일 */
+  const progressPct = ((cur + 1) / cards.length) * 100;
+  const progressBar = `
+    <div class="mb-5">
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-xs font-semibold text-slate-500">문제 ${cur + 1} / ${cards.length}</span>
+        <span class="text-[10px] text-slate-400">${mode === 'instant' ? '즉시 피드백' : '다 풀고 채점'} 모드</span>
+      </div>
+      <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div class="h-full bg-indigo-500 transition-all duration-300" style="width:${progressPct}%"></div>
+      </div>
     </div>`;
 
+  /* 모드 토글 — 작게, 카드 위 */
+  const modeToggle = `
+    <div class="flex items-center gap-1 mb-3 justify-end">
+      <button onclick="setExamMode('instant')"
+              class="text-[10px] px-2.5 py-1 rounded-full font-medium transition ${mode === 'instant' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}">즉시 채점</button>
+      <button onclick="setExamMode('batch')"
+              class="text-[10px] px-2.5 py-1 rounded-full font-medium transition ${mode === 'batch' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}">한번에 채점</button>
+    </div>`;
+
+  /* 객관식 보기 — 간결, 번호 뱃지 제거하고 ①②③④ 아이콘만 */
+  const circled = ['', '①', '②', '③', '④', '⑤'];
   const choicesHTML = (isMC && choices.length) ? `
-    <div class="space-y-2 mt-4 ex-choices">
+    <div class="space-y-1.5 mt-4">
       ${choices.map(ch => {
-        let cls = 'border-slate-200 hover:bg-indigo-50 hover:border-indigo-300';
+        let cls = 'border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40';
+        let mark = 'text-slate-400';
+        let icon = '';
         if (showAnswerMC) {
-          if (ch.num === correct)        cls = 'border-green-400 bg-green-50 text-green-700';
-          else if (ch.num === picked)    cls = 'border-red-400 bg-red-50 text-red-700';
-          else                           cls = 'border-slate-200 opacity-50';
+          if (ch.num === correctNum) {
+            cls = 'border-emerald-300 bg-emerald-50';
+            mark = 'text-emerald-600';
+            icon = '<span class="ml-auto text-emerald-600 text-sm">✓</span>';
+          } else if (ch.num === picked) {
+            cls = 'border-rose-300 bg-rose-50';
+            mark = 'text-rose-500';
+            icon = '<span class="ml-auto text-rose-500 text-sm">✕</span>';
+          } else {
+            cls = 'border-slate-200 opacity-50';
+          }
         } else if (ch.num === picked) {
-          cls = 'border-indigo-400 bg-indigo-50 text-indigo-700';
+          cls = 'border-indigo-400 bg-indigo-50';
+          mark = 'text-indigo-600';
         }
         return `
           <button onclick="pickChoice(${ch.num})" ${showAnswerMC ? 'disabled' : ''}
-                  class="w-full text-left px-3 py-2.5 border rounded text-xs transition ${cls}">
-            <span class="font-semibold mr-2">${'①②③④⑤'[ch.num - 1]}</span>${escapeHtml(ch.text)}
+                  class="w-full flex items-center text-left px-3.5 py-2.5 border rounded-lg text-sm transition ${cls} ${showAnswerMC ? '' : 'cursor-pointer'}">
+            <span class="${mark} mr-2.5 font-medium">${circled[ch.num] || ch.num}</span>
+            <span class="flex-1 text-slate-800">${escapeHtml(ch.text)}</span>
+            ${icon}
           </button>`;
       }).join('')}
     </div>` : '';
 
+  /* 즉시 피드백 메시지 */
+  const feedbackMsg = (showAnswerMC && picked !== null) ? `
+    <div class="mt-4 flex items-center gap-2 px-3 py-2 rounded-lg ${isCorrect ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'} text-xs font-medium">
+      <span class="text-base">${isCorrect ? '✅' : '❌'}</span>
+      <span>${isCorrect ? '정답임! 잘했음.' : `오답임. 정답은 <b>${correctNum}번</b>.`}</span>
+    </div>
+  ` : '';
+
+  /* 주관식 — 정답 보기 버튼 */
   const saButton = (!isMC && !showAnswerSA) ? `
-    <button onclick="revealSaAnswer()" class="text-[10px] mt-3 px-2.5 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200">정답 보기</button>
+    <div class="mt-5 text-center">
+      <button onclick="revealSaAnswer()"
+              class="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-200">💡 정답 보기</button>
+    </div>
   ` : '';
 
-  const answerBox = (showAnswer && c.answer) ? `
-    <div class="mt-3 p-3 bg-indigo-50/60 border border-indigo-100 rounded text-xs text-slate-700 whitespace-pre-wrap">${escapeHtml(c.answer)}</div>
+  /* 해설/정답 박스 */
+  const answerBox = (showAnswer && c.answer && !isMC) ? `
+    <div class="mt-5 p-4 bg-indigo-50/70 border-l-4 border-indigo-400 rounded-r-lg">
+      <p class="text-[10px] font-semibold text-indigo-600 mb-1">정답</p>
+      <p class="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">${escapeHtml(c.answer)}</p>
+    </div>
   ` : '';
 
-  // 진행 표시 (각 문제의 답한 상태)
+  /* 하단 도트 네비 */
   const dots = cards.map((cc, i) => {
-    let cls = 'bg-slate-200';
-    if (i === cur) cls = 'bg-indigo-500 w-4';
+    let cls = 'bg-slate-200 hover:bg-slate-300';
+    if (i === cur) cls = 'bg-indigo-500';
     else if (picks[i] !== null) cls = 'bg-indigo-300';
-    return `<button onclick="goExam(${i})" class="h-1.5 ${cls} rounded-full transition-all" style="width:${i === cur ? '16px' : '8px'}" title="${i + 1}번"></button>`;
+    return `<button onclick="goExam(${i})"
+                    class="h-2 rounded-full transition-all ${cls}"
+                    style="width:${i === cur ? '20px' : '8px'}"
+                    title="${i + 1}번"></button>`;
   }).join('');
 
-  // 네비
   const allAnswered = picks.every((p, i) => cards[i].type !== '객관식' || p !== null);
   const isLast = cur === cards.length - 1;
   const showFinish = mode === 'batch' && !scored && allAnswered;
 
   const nav = `
-    <div class="flex items-center gap-2 mt-5">
+    <div class="flex items-center justify-between gap-3 mt-6">
       <button onclick="goExam(${cur - 1})" ${cur === 0 ? 'disabled' : ''}
-              class="px-3.5 py-2 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed">← 이전</button>
-      <div class="flex-1 flex items-center justify-center gap-1.5 px-2">${dots}</div>
+              class="px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed">← 이전</button>
+      <div class="flex-1 flex items-center justify-center gap-1.5">${dots}</div>
       ${showFinish ? `
-        <button onclick="finishExam()" class="px-4 py-2 bg-indigo-500 text-white rounded text-xs font-medium hover:bg-indigo-600">채점하기</button>
+        <button onclick="finishExam()"
+                class="px-5 py-2.5 bg-emerald-500 text-white rounded-lg text-sm font-semibold hover:bg-emerald-600 shadow-sm">📊 채점하기</button>
+      ` : isLast && mode === 'instant' && scored ? `
+        <button onclick="finishExam()"
+                class="px-5 py-2.5 bg-emerald-500 text-white rounded-lg text-sm font-semibold hover:bg-emerald-600 shadow-sm">📊 결과 보기</button>
+      ` : isLast ? `
+        <button onclick="finishExam()"
+                class="px-5 py-2.5 bg-indigo-500 text-white rounded-lg text-sm font-semibold hover:bg-indigo-600 shadow-sm">📊 결과 보기</button>
       ` : `
-        <button onclick="goExam(${cur + 1})" ${isLast ? 'disabled' : ''}
-                class="px-3.5 py-2 border border-slate-200 rounded text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed">다음 →</button>
+        <button onclick="goExam(${cur + 1})"
+                class="px-4 py-2.5 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600">다음 →</button>
       `}
     </div>`;
 
   wrap.innerHTML = `
+    ${progressBar}
     ${modeToggle}
-    <div class="border border-slate-200 rounded-lg p-4 bg-white">
-      <div class="flex justify-between items-center mb-2.5">
-        <span class="text-[10px] text-indigo-500 font-semibold">${c.type} ${c.num}번</span>
-        <span class="text-[10px] text-slate-400">${cur + 1} / ${cards.length}</span>
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="text-[10px] font-bold px-2 py-1 rounded-md ${isMC ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}">${c.type}</span>
+        <span class="text-[10px] text-slate-400">Q${c.num}</span>
       </div>
-      <div class="text-sm whitespace-pre-wrap text-slate-800 leading-relaxed">${escapeHtml(c.question)}</div>
+      <p class="text-base font-medium text-slate-900 leading-relaxed whitespace-pre-wrap">${escapeHtml(c.question)}</p>
       ${choicesHTML}
+      ${feedbackMsg}
       ${saButton}
       ${answerBox}
     </div>
@@ -852,6 +958,12 @@ function goExam(idx) {
   if (idx < 0 || idx >= examState.cards.length) return;
   examState.cur = idx;
   paintExam();
+}
+
+function retryParseExam() {
+  examState = null;
+  document.getElementById('exam-cards').innerHTML = '';
+  renderExamCards();
 }
 
 function finishExam() {
