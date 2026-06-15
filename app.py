@@ -160,13 +160,7 @@ async def upload_document(
         except Exception:
             pass
 
-    # 새 자료 들어왔으니 옛 영상 + 영상 job 무효화
-    old_video = _video_path(student_id)
-    if os.path.exists(old_video):
-        try:
-            os.unlink(old_video)
-        except Exception:
-            pass
+    # 새 자료 업로드됨 — 메모리 job 만 폐기 (옛 mp4 는 강의자료별 이름으로 보관됨)
     with _video_lock:
         _video_jobs.pop(student_id, None)
 
@@ -367,7 +361,21 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
 
 # ── 인강 영상 (SSE 진행 + 별도 다운로드) ────────────
 
-def _video_path(student_id: str) -> str:
+def _safe_name(name: str) -> str:
+    """파일명에서 확장자 제거 + 경로/특수문자 sanitize."""
+    base = (name or "untitled").rsplit(".", 1)[0]
+    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in base)
+    return (safe.strip("_.") or "untitled")[:80]
+
+
+def _video_path(student_id: str, source_filename: str = None) -> str:
+    """현재 강의자료에 매칭되는 영상 경로.
+    source_filename 안 주면 RAG 메타에서 자동 조회. 메타도 없으면 sid-only fallback."""
+    if source_filename is None:
+        meta = get_meta(student_id) or {}
+        source_filename = meta.get("filename")
+    if source_filename:
+        return os.path.join(BASE_DIR, f"lecture_{student_id}_{_safe_name(source_filename)}.mp4")
     return os.path.join(BASE_DIR, f"lecture_{student_id}.mp4")
 
 
