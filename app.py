@@ -359,6 +359,44 @@ async def chat(msg: ChatMessage, user=Depends(get_current_user)):
     )
 
 
+# ── 모델 전환 ──────────────────────────────────────
+
+class ModelChange(BaseModel):
+    name: str
+
+
+@app.get("/model")
+async def get_model(user=Depends(get_current_user)):
+    """현재 활성 모델 + ollama 에 받아둔 사용 가능 모델 목록."""
+    import requests
+    import llm.ollama as ollama_mod
+    try:
+        r = requests.get(f"{ollama_mod.OLLAMA_HOST}/api/tags", timeout=5)
+        installed = sorted([m["name"] for m in r.json().get("models", [])])
+    except Exception:
+        installed = [ollama_mod.OLLAMA_MODEL]
+    return {"current": ollama_mod.OLLAMA_MODEL, "available": installed}
+
+
+@app.post("/model")
+async def set_model(req: ModelChange, user=Depends(get_current_user)):
+    """런타임 모델 전환 — ollama 에 받아둔 모델만 허용."""
+    import requests
+    import llm.ollama as ollama_mod
+    try:
+        r = requests.get(f"{ollama_mod.OLLAMA_HOST}/api/tags", timeout=5)
+        installed = {m["name"] for m in r.json().get("models", [])}
+    except Exception:
+        installed = set()
+    if req.name not in installed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"모델 '{req.name}' 가 ollama 에 없음. 먼저 'ollama pull {req.name}' 필요",
+        )
+    ollama_mod.OLLAMA_MODEL = req.name
+    return {"current": req.name, "available": sorted(installed)}
+
+
 # ── 인강 영상 (SSE 진행 + 별도 다운로드) ────────────
 
 def _safe_name(name: str) -> str:
