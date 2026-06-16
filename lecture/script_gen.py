@@ -127,8 +127,26 @@ def _validate(slides: list[dict]) -> list[dict]:
     """필드 누락은 폴백으로 채워서 슬라이드 살리기 (LLM 응답 잘림 가드)."""
     if not isinstance(slides, list) or not slides:
         raise ValueError("슬라이드 리스트가 비어있음")
+    # nested list 풀기: [[{...}, {...}], ...] → [{...}, {...}, ...]
+    flat = []
+    for s in slides:
+        if isinstance(s, list):
+            flat.extend(s)
+        else:
+            flat.append(s)
+    slides = flat
     cleaned: list[dict] = []
     for idx, s in enumerate(slides, 1):
+        if not isinstance(s, dict):
+            # dict 아니면 폴백 슬라이드 만들기 — 영상 자체는 살림
+            cleaned.append({
+                "index":     idx,
+                "title":     f"슬라이드 {idx}",
+                "headline":  "",
+                "bullets":   [str(s)[:90]] if s else [f"슬라이드 {idx} 내용"],
+                "narration": str(s)[:600] if s else f"슬라이드 {idx}",
+            })
+            continue
         title     = str(s.get("title", "")).strip() or f"슬라이드 {idx}"
         headline  = str(s.get("headline", "")).strip()
         raw_bull  = s.get("bullets", [])
@@ -158,7 +176,7 @@ def generate_script(context: str, level_info: dict | None = None) -> list[dict]:
 
     각 원소: {index, title, headline, bullets, narration}
     """
-    raw = ask_qwen(context, SCRIPT_PROMPT, level_info)
+    raw = ask_qwen(context, SCRIPT_PROMPT, level_info, prefer_json=True)
     try:
         slides = _extract_json_array(raw)
         return _validate(slides)

@@ -58,10 +58,19 @@ def _call_ollama(context, question, level_info=None, stream=False):
     return resp
 
 
-def _strip_reasoning_prefix(text):
+def _strip_reasoning_prefix(text, prefer_json=False):
     """영어 reasoning prefix (Okay, Let me, ...) 제거.
-    첫 한국어 또는 형식 마커부터 잘라냄."""
+    prefer_json=True 면 [ 또는 { 위치 우선 (JSON 구조 보존).
+    아니면 첫 한국어 또는 형식 마커부터."""
     if not text:
+        return text
+    if prefer_json:
+        # JSON 응답 기대 — [ 또는 { 위치까지 자름 (한국어 prefix 보다 우선)
+        markers = [text.find(c) for c in ("[", "{")]
+        markers = [i for i in markers if i >= 0]
+        if markers:
+            cut = min(markers)
+            return text[cut:] if cut > 0 else text
         return text
     m = _HANGUL_RE.search(text)
     markers = [text.find(c) for c in ("1.", "[", "▶", "#", "▷", "✓")]
@@ -70,9 +79,9 @@ def _strip_reasoning_prefix(text):
     return text[cut:] if cut > 0 else text
 
 
-def ask_qwen(context, question, level_info=None):
+def ask_qwen(context, question, level_info=None, *, prefer_json=False):
     raw = _call_ollama(context, question, level_info, stream=False).json()["message"]["content"]
-    return _strip_reasoning_prefix(raw)
+    return _strip_reasoning_prefix(raw, prefer_json=prefer_json)
 
 
 _HANGUL_RE = re.compile(r"[가-힣]")
