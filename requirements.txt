@@ -23,6 +23,7 @@ pypdf
 python-hwpx
 pyhwp
 python-pptx
+python-docx
 lxml
 olefile
 
