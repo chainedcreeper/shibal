@@ -39,6 +39,13 @@ def _messages(context, question, level_info=None):
 
 
 def _call_ollama(context, question, level_info=None, stream=False):
+    # 모델 크기에 따라 응답 토큰 한도 자동 조절
+    # 큰 모델은 토큰 생성 속도가 느리므로 응답 짧게 → 시연 시간 단축
+    model_lc = OLLAMA_MODEL.lower()
+    is_large = any(k in model_lc for k in ("32b", "30b", "70b", "27b", "exaone3.5:32"))
+    num_predict = 2048 if is_large else 16384   # 큰 모델은 응답 짧게 (시연 시간 단축)
+    num_ctx     = 8192 if is_large else 16384
+
     resp = requests.post(
         f"{OLLAMA_HOST}/api/chat",
         json={
@@ -47,11 +54,11 @@ def _call_ollama(context, question, level_info=None, stream=False):
             "stream":   stream,
             "think":    False,
             "options": {
-                "num_predict": 16384,   # 영상 스크립트 등 긴 JSON 응답도 잘리지 않게
-                "num_ctx":     16384,   # 강의 자료 + 응답 공간 여유
+                "num_predict": num_predict,
+                "num_ctx":     num_ctx,
             },
         },
-        timeout=600,    # 32B 등 느린 모델 대비
+        timeout=900,    # 큰 모델 대비
         stream=stream,
     )
     resp.raise_for_status()
